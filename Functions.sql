@@ -117,3 +117,57 @@ BEGIN
 END;
 GO
 
+IF OBJECT_ID('Education.CheckCoursePrerequisitesMet', 'FN') IS NOT NULL
+OR OBJECT_ID('Education.CheckCoursePrerequisitesMet', 'IF') IS NOT NULL
+BEGIN
+    DROP FUNCTION Education.CheckCoursePrerequisitesMet;
+    PRINT 'Dropped existing Function Education.CheckCoursePrerequisitesMet.';
+END
+GO
+
+CREATE FUNCTION Education.CheckCoursePrerequisitesMet
+(
+    @StudentID INT,
+    @CourseID INT      
+)
+RETURNS BIT 
+AS
+BEGIN
+    DECLARE @AllPrerequisitesMet BIT = 1; -- Assume true until proven false
+    DECLARE @PassedStatusID INT;
+
+    -- Get the ID for the 'Passed' enrollment status
+    SELECT @PassedStatusID = EnrollmentStatusID FROM Education.EnrollmentStatuses
+
+	IF @PassedStatusID IS NULL
+    BEGIN
+        RETURN 0;
+    END
+
+	IF NOT EXISTS (SELECT 1 FROM Education.Courses WHERE CourseID = @CourseID)
+    BEGIN
+        RETURN 0; -- Course does not exist
+    END
+
+	-- Find all prerequisites for the given CourseID
+    -- And check if the student has NOT passed any of them
+    IF EXISTS (
+        SELECT P.PrerequisiteCourseID
+        FROM Education.Prerequisites P
+        WHERE P.CourseID = @CourseID -- Get prerequisites for the target course
+        
+        EXCEPT -- Find prerequisites that the student has NOT passed
+
+        SELECT C.CourseID
+        FROM Education.Enrollments E
+        JOIN Education.OfferedCourses OC ON E.OfferedCourseID = OC.OfferedCourseID
+        JOIN Education.Courses C ON OC.CourseID = C.CourseID
+        WHERE E.StudentID = @StudentID
+        AND E.EnrollmentStatusID = @PassedStatusID -- Only consider courses student has passed
+    )
+	BEGIN
+        SET @AllPrerequisitesMet = 0; -- If there's any prerequisite the student hasn't passed, set to false
+    END
+    RETURN @AllPrerequisitesMet;
+END;
+GO
