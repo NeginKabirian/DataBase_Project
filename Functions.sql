@@ -214,3 +214,59 @@ BEGIN
     RETURN @CurrentStatus;
 END;
 GO
+
+
+USE YourDatabaseName; -- <<<<<<<<<<< REPLACE YourDatabaseName WITH YOUR ACTUAL DATABASE NAME
+GO
+
+IF OBJECT_ID('Education.GetOfferedCourseAvailableCapacity', 'FN') IS NOT NULL
+OR OBJECT_ID('Education.GetOfferedCourseAvailableCapacity', 'IF') IS NOT NULL
+BEGIN
+    DROP FUNCTION Education.GetOfferedCourseAvailableCapacity;
+    PRINT 'Dropped existing Function Education.GetOfferedCourseAvailableCapacity.';
+END
+GO
+
+CREATE FUNCTION Education.GetOfferedCourseAvailableCapacity
+(
+    @OfferedCourseID INT
+)
+RETURNS INT 
+AS
+BEGIN
+    DECLARE @TotalCapacity INT;
+    DECLARE @EnrolledCount INT;
+    DECLARE @EnrolledStatusID INT;
+
+ 
+    SELECT @TotalCapacity = Capacity
+    FROM Education.OfferedCourses
+    WHERE OfferedCourseID = @OfferedCourseID;
+
+
+    IF @TotalCapacity IS NULL
+    BEGIN
+        RETURN -1;
+    END
+
+    -- Get the ID for the 'Enrolled' status
+    SELECT @EnrolledStatusID = EnrollmentStatusID
+    FROM Education.EnrollmentStatuses
+    WHERE TRIM(StatusName) = 'Enrolled';
+
+
+    IF @EnrolledStatusID IS NULL
+    BEGIN
+        RETURN @TotalCapacity;
+    END
+
+    
+    SELECT @EnrolledCount = COUNT(EnrollmentID)
+    FROM Education.Enrollments
+    WHERE OfferedCourseID = @OfferedCourseID
+    AND EnrollmentStatusID = @EnrolledStatusID;
+
+    
+    RETURN @TotalCapacity - @EnrolledCount;
+END;
+GO
