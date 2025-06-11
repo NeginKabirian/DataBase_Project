@@ -128,46 +128,89 @@ GO
 CREATE FUNCTION Education.CheckCoursePrerequisitesMet
 (
     @StudentID INT,
-    @CourseID INT      
+    @CourseID INT
 )
-RETURNS BIT 
+RETURNS BIT
 AS
 BEGIN
-    DECLARE @AllPrerequisitesMet BIT = 1; -- Assume true until proven false
+    DECLARE @AllPrerequisitesMet BIT = 0; -- Default to false
+    DECLARE @RequiredPrereqsCount INT;
+    DECLARE @MetPrereqsCount INT;
     DECLARE @PassedStatusID INT;
 
-    -- Get the ID for the 'Passed' enrollment status
-    SELECT @PassedStatusID = EnrollmentStatusID FROM Education.EnrollmentStatuses
+    -- Get the 'Passed' status ID, handle trailing/leading spaces
+    SELECT @PassedStatusID = EnrollmentStatusID
+    FROM Education.EnrollmentStatuses
+    WHERE TRIM(StatusName) = 'Passed';
 
-	IF @PassedStatusID IS NULL
-    BEGIN
+    -- If 'Passed' status isn't defined, we can't check, so it's a failure
+    IF @PassedStatusID IS NULL
         RETURN 0;
-    END
 
-	IF NOT EXISTS (SELECT 1 FROM Education.Courses WHERE CourseID = @CourseID)
+    -- 1. Count how many prerequisites are required for the target course
+    SELECT @RequiredPrereqsCount = COUNT(PrerequisiteCourseID)
+    FROM Education.Prerequisites
+    WHERE CourseID = @CourseID;
+
+    -- 2. If there are no prerequisites, the condition is met.
+    IF @RequiredPrereqsCount = 0
     BEGIN
-        RETURN 0; -- Course does not exist
+        SET @AllPrerequisitesMet = 1;
+        RETURN @AllPrerequisitesMet;
     END
 
-	-- Find all prerequisites for the given CourseID
-    -- And check if the student has NOT passed any of them
-    IF EXISTS (
-        SELECT P.PrerequisiteCourseID
-        FROM Education.Prerequisites P
-        WHERE P.CourseID = @CourseID -- Get prerequisites for the target course
-        
-        EXCEPT -- Find prerequisites that the student has NOT passed
+    -- 3. Count how many of those required prerequisites the student has passed
+    SELECT @MetPrereqsCount = COUNT(DISTINCT P.PrerequisiteCourseID)
+    FROM Education.Prerequisites P
+    INNER JOIN Education.Enrollments E ON 1=1 -- This will be filtered by subquery
+    INNER JOIN Education.OfferedCourses OC ON E.OfferedCourseID = OC.OfferedCourseID
+    WHERE
+        P.CourseID = @CourseID                        -- Look at prereqs for the target course
+        AND E.StudentID = @StudentID                  -- For the specific student
+        AND E.EnrollmentStatusID = @PassedStatusID      -- Only consider 'Passed' courses
+        AND OC.CourseID = P.PrerequisiteCourseID;     -- The passed course must be one of the prerequisites
 
-        SELECT C.CourseID
-        FROM Education.Enrollments E
-        JOIN Education.OfferedCourses OC ON E.OfferedCourseID = OC.OfferedCourseID
-        JOIN Education.Courses C ON OC.CourseID = C.CourseID
-        WHERE E.StudentID = @StudentID
-        AND E.EnrollmentStatusID = @PassedStatusID -- Only consider courses student has passed
-    )
-	BEGIN
-        SET @AllPrerequisitesMet = 0; -- If there's any prerequisite the student hasn't passed, set to false
+    IF @MetPrereqsCount = @RequiredPrereqsCount
+    BEGIN
+        SET @AllPrerequisitesMet = 1;
     END
+
     RETURN @AllPrerequisitesMet;
+END;
+GO
+
+
+
+IF OBJECT_ID('Education.GetStudentCurrentAcademicStatus', 'FN') IS NOT NULL
+OR OBJECT_ID('Education.GetStudentCurrentAcademicStatus', 'IF') IS NOT NULL
+BEGIN
+    DROP FUNCTION Education.GetStudentCurrentAcademicStatus;
+    PRINT 'Dropped existing Function Education.GetStudentCurrentAcademicStatus.';
+END
+GO
+
+CREATE FUNCTION Education.GetStudentCurrentAcademicStatus
+(
+    @StudentID INT
+)
+RETURNS NVARCHAR(50) 
+AS
+BEGIN
+    DECLARE @CurrentStatus NVARCHAR(50);
+
+    SELECT TOP 1 @CurrentStatus = SAH.AcademicStatus
+    FROM Education.StudentAcademicHistory SAH
+    WHERE SAH.StudentID = @StudentID
+    ORDER BY
+        SAH.StatusDate DESC, -- Get the most recent status by date
+        SAH.SemesterID DESC; -- If dates are the same, prefer the higher (more recent) semester ID
+
+    
+    IF @CurrentStatus IS NULL
+    BEGIN
+        SET @CurrentStatus = 'N/A - No History'; 
+    END
+
+    RETURN @CurrentStatus;
 END;
 GO
