@@ -148,7 +148,7 @@ CREATE TABLE [Education].[StudentAcademicHistory] (
   [HistoryID] int PRIMARY KEY IDENTITY(1, 1),
   [StudentID] int NOT NULL,
   [SemesterID] int NOT NULL,
-  [GPA] decimal(3,2),
+  [GPA] decimal(4,2),
   [AcademicStatus] nvarchar(50),
   [StatusDate] date NOT NULL,
   [Notes] ntext
