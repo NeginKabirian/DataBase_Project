@@ -271,7 +271,7 @@ BEGIN
 END;
 GO
 
-
+--Library Function
 CREATE FUNCTION Library.CountAvailableBookCopies(@BookID INT)
 RETURNS INT
 AS
@@ -287,17 +287,23 @@ BEGIN
     RETURN @AvailableCount;
 END;
 Go
+--DROP FUNCTION IF EXISTS Library.HasMemberOverdueBooks;
+
 CREATE FUNCTION Library.HasMemberOverdueBooks(@MemberID INT)
 RETURNS BIT
 AS
 BEGIN
     DECLARE @HasOverdue BIT;
+
     IF EXISTS (
         SELECT 1
-        FROM Loans
-        WHERE MemberID = @MemberID
-          AND ReturnDate IS NULL
-          AND DueDate < GETDATE()
+        FROM Library.Loans L
+        JOIN Library.LibraryMembers M ON L.MemberID = M.MemberID
+        JOIN Library.MemberAccountStatuses S ON M.AccountStatusID = S.AccountStatusID
+        WHERE L.MemberID = @MemberID
+          AND L.ReturnDate IS NULL
+          AND L.DueDate < GETDATE()
+          AND S.StatusName = 'Active'
     )
         SET @HasOverdue = 1;
     ELSE
@@ -305,4 +311,21 @@ BEGIN
 
     RETURN @HasOverdue;
 END;
+GO
 
+Go
+CREATE FUNCTION Library.GetMemberActiveLoanCount(@MemberID INT)
+RETURNS INT
+AS
+BEGIN
+    DECLARE @ActiveLoanCount INT;
+
+    SELECT @ActiveLoanCount = COUNT(*)
+    FROM Library.Loans L
+    JOIN Library.LibraryMembers M ON L.MemberID = M.MemberID
+    JOIN Library.MemberAccountStatuses S ON M.AccountStatusID = S.AccountStatusID
+    WHERE L.MemberID = @MemberID
+      AND L.ReturnDate IS NULL
+      AND S.StatusName = 'Active';
+    RETURN @ActiveLoanCount;
+END;
