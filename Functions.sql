@@ -270,3 +270,39 @@ BEGIN
     RETURN @TotalCapacity - @EnrolledCount;
 END;
 GO
+
+
+CREATE FUNCTION Library.CountAvailableBookCopies(@BookID INT)
+RETURNS INT
+AS
+BEGIN
+    DECLARE @AvailableCount INT;
+
+    SELECT @AvailableCount = COUNT(*)
+    FROM BookCopies
+    WHERE BookID = @BookID AND CopyStatusID = (
+        SELECT CopyStatusID FROM BookCopyStatuses WHERE StatusName = 'Available'
+    );
+
+    RETURN @AvailableCount;
+END;
+Go
+CREATE FUNCTION Library.HasMemberOverdueBooks(@MemberID INT)
+RETURNS BIT
+AS
+BEGIN
+    DECLARE @HasOverdue BIT;
+    IF EXISTS (
+        SELECT 1
+        FROM Loans
+        WHERE MemberID = @MemberID
+          AND ReturnDate IS NULL
+          AND DueDate < GETDATE()
+    )
+        SET @HasOverdue = 1;
+    ELSE
+        SET @HasOverdue = 0;
+
+    RETURN @HasOverdue;
+END;
+
