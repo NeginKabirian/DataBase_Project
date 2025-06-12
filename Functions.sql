@@ -364,4 +364,29 @@ BEGIN
     RETURN @Fine;
 END;
 GO
+CREATE FUNCTION Library.IsBookCopyAvailable(@CopyID INT)
+RETURNS BIT
+AS
+BEGIN
+    DECLARE @IsAvailable BIT = 0;
+    DECLARE @StatusName NVARCHAR(50);
+
+    SELECT @StatusName = S.StatusName
+    FROM Library.BookCopies C
+    JOIN Library.BookCopyStatuses S ON C.CopyStatusID = S.CopyStatusID
+    WHERE C.CopyID = @CopyID;
+
+    IF @StatusName = 'Available' AND NOT EXISTS (
+        SELECT 1
+        FROM Library.Loans
+        WHERE CopyID = @CopyID AND ReturnDate IS NULL
+    )
+    BEGIN
+        SET @IsAvailable = 1;
+    END
+
+    RETURN @IsAvailable;
+END;
+GO
+
 
