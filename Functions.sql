@@ -216,7 +216,7 @@ END;
 GO
 
 
-USE YourDatabaseName; -- <<<<<<<<<<< REPLACE YourDatabaseName WITH YOUR ACTUAL DATABASE NAME
+USE YourDatabase; -- <<<<<<<<<<< REPLACE YourDatabaseName WITH YOUR ACTUAL DATABASE NAME
 GO
 
 IF OBJECT_ID('Education.GetOfferedCourseAvailableCapacity', 'FN') IS NOT NULL
@@ -329,3 +329,39 @@ BEGIN
       AND S.StatusName = 'Active';
     RETURN @ActiveLoanCount;
 END;
+Go
+CREATE FUNCTION Library.CalculateFineForLoan(@LoanID INT)
+RETURNS DECIMAL(10,2)
+AS
+BEGIN
+    DECLARE @Fine DECIMAL(10,2) = 0;
+    DECLARE @ReturnDate DATE;
+    DECLARE @DueDate DATE;
+    DECLARE @DailyFineRate DECIMAL(10,2) = 2000; 
+    DECLARE @BookPrice DECIMAL(10,2);
+    DECLARE @MemberStatus NVARCHAR(50);
+
+    SELECT 
+        @ReturnDate = L.ReturnDate,
+        @DueDate = L.DueDate,
+        @BookPrice = BC.PurchasePrice,
+        @MemberStatus = S.StatusName
+    FROM Library.Loans L
+    JOIN Library.LibraryMembers M ON L.MemberID = M.MemberID
+    JOIN Library.MemberAccountStatuses S ON M.AccountStatusID = S.AccountStatusID
+    JOIN Library.BookCopies BC ON L.CopyID = BC.CopyID
+    WHERE L.LoanID = @LoanID;
+
+    IF @ReturnDate IS NOT NULL 
+       AND @ReturnDate > @DueDate
+       AND @MemberStatus = 'Active'
+    BEGIN
+        SET @Fine = DATEDIFF(DAY, @DueDate, @ReturnDate) * @DailyFineRate;
+
+        IF @Fine > @BookPrice
+            SET @Fine = @BookPrice;
+    END
+    RETURN @Fine;
+END;
+GO
+
