@@ -39,3 +39,70 @@ BEGIN
     VALUES (@NationalID, @FirstName, @LastName, @DateOfBirth, @EnrollmentDate, @MajorID, @StudentStatusID, @Email, @PhoneNumber);
 END;
 GO
+
+
+
+IF OBJECT_ID('Education.TR_Students_AfterInsert_CreateLibraryAccount', 'TR') IS NOT NULL
+    DROP TRIGGER Education.TR_Students_AfterInsert_CreateLibraryAccount;
+GO
+
+CREATE TRIGGER Education.TR_Students_AfterInsert_CreateLibraryAccount
+ON Education.Students
+AFTER INSERT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- If the trigger was fired but no rows were affected, do nothing.
+    IF NOT EXISTS (SELECT 1 FROM inserted)
+    BEGIN
+        RETURN;
+    END
+
+    -- Using a cursor to handle multi-row inserts robustly
+    DECLARE @StudentID INT, @FirstName NVARCHAR(100), @LastName NVARCHAR(100);
+    DECLARE student_cursor CURSOR FOR
+        SELECT StudentID, FirstName, LastName FROM inserted;
+
+    OPEN student_cursor;
+    FETCH NEXT FROM student_cursor INTO @StudentID, @FirstName, @LastName;
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        BEGIN TRY
+            -- Execute the procedure to create the library member
+            EXEC Library.CreateLibraryMemberFromStudent
+                @StudentID = @StudentID,
+                @FirstName = @FirstName,
+                @LastName = @LastName;
+        END TRY
+        BEGIN CATCH
+            -- Check if the transaction is uncommittable
+            IF (XACT_STATE()) = -1
+            BEGIN
+                PRINT 'An uncommittable transaction was found. Rolling back transaction.';
+                ROLLBACK TRANSACTION;
+                DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
+                RAISERROR('Error creating library account for StudentID %d. The student registration has been rolled back. Original Error: %s', 16, 1, @StudentID, @ErrorMessage);
+                
+                BREAK; 
+            END
+            ELSE
+            BEGIN
+                DECLARE @ErrorMsgLog NVARCHAR(4000) = ERROR_MESSAGE();
+                INSERT INTO Education.EducationLog (EventType, Description, AffectedTable, AffectedRecordID, UserID)
+                VALUES ('LibraryAccountCreationFailedViaTrigger', 
+                        'Error creating library account for new student ID: ' + CAST(@StudentID AS VARCHAR) + '. Error: ' + @ErrorMsgLog, 
+                        'Education.Students', 
+                        CAST(@StudentID AS VARCHAR), 
+                        SUSER_SNAME());
+            END;
+        END CATCH
+
+        FETCH NEXT FROM student_cursor INTO @StudentID, @FirstName, @LastName;
+    END
+
+    CLOSE student_cursor;
+    DEALLOCATE student_cursor;
+END;
+GO
