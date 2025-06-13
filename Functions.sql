@@ -8,14 +8,14 @@ GO
 CREATE FUNCTION  Education.CalculateStudentGPA
 (
     @StudentID INT,
-    @SemesterID INT NULL --اگر مقدارش هیچ باشد، معدل کل حساب میشود
+    @SemesterID INT NULL 
 )
-RETURNS DECIMAL(4,2) -- معدل معمولاً با دو رقم اعشار نمایش داده می‌شود.
+RETURNS DECIMAL(4,2) 
 AS
 BEGIN
-    DECLARE @TotalGradePoints DECIMAL(18,2) = 0; --مجموع نمره ضربدر واحد
-    DECLARE @TotalCredits DECIMAL(18,2) = 0;    -- مجموع واحدها
-    DECLARE @CalculatedGPA DECIMAL(4,2) = 0; --نتیجه نهایی معدل
+    DECLARE @TotalGradePoints DECIMAL(18,2) = 0;   
+    DECLARE @TotalCredits DECIMAL(18,2) = 0;      
+    DECLARE @CalculatedGPA DECIMAL(4,2) = 0;   
 
 	DECLARE @PassedStatusID INT;
     DECLARE @FailedStatusID INT;
@@ -216,8 +216,6 @@ END;
 GO
 
 
-USE YourDatabaseName; -- <<<<<<<<<<< REPLACE YourDatabaseName WITH YOUR ACTUAL DATABASE NAME
-GO
 
 IF OBJECT_ID('Education.GetOfferedCourseAvailableCapacity', 'FN') IS NOT NULL
 OR OBJECT_ID('Education.GetOfferedCourseAvailableCapacity', 'IF') IS NOT NULL
@@ -249,7 +247,7 @@ BEGIN
         RETURN -1;
     END
 
-    -- Get the ID for the 'Enrolled' status
+  
     SELECT @EnrolledStatusID = EnrollmentStatusID
     FROM Education.EnrollmentStatuses
     WHERE TRIM(StatusName) = 'Enrolled';
