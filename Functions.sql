@@ -216,7 +216,7 @@ END;
 GO
 
 
-USE YourDatabaseName; -- <<<<<<<<<<< REPLACE YourDatabaseName WITH YOUR ACTUAL DATABASE NAME
+USE YourDatabase; -- <<<<<<<<<<< REPLACE YourDatabaseName WITH YOUR ACTUAL DATABASE NAME
 GO
 
 IF OBJECT_ID('Education.GetOfferedCourseAvailableCapacity', 'FN') IS NOT NULL
@@ -270,3 +270,123 @@ BEGIN
     RETURN @TotalCapacity - @EnrolledCount;
 END;
 GO
+
+--Library Function
+CREATE FUNCTION Library.CountAvailableBookCopies(@BookID INT)
+RETURNS INT
+AS
+BEGIN
+    DECLARE @AvailableCount INT;
+
+    SELECT @AvailableCount = COUNT(*)
+    FROM BookCopies
+    WHERE BookID = @BookID AND CopyStatusID = (
+        SELECT CopyStatusID FROM BookCopyStatuses WHERE StatusName = 'Available'
+    );
+
+    RETURN @AvailableCount;
+END;
+Go
+--DROP FUNCTION IF EXISTS Library.HasMemberOverdueBooks;
+
+CREATE FUNCTION Library.HasMemberOverdueBooks(@MemberID INT)
+RETURNS BIT
+AS
+BEGIN
+    DECLARE @HasOverdue BIT;
+
+    IF EXISTS (
+        SELECT 1
+        FROM Library.Loans L
+        JOIN Library.LibraryMembers M ON L.MemberID = M.MemberID
+        JOIN Library.MemberAccountStatuses S ON M.AccountStatusID = S.AccountStatusID
+        WHERE L.MemberID = @MemberID
+          AND L.ReturnDate IS NULL
+          AND L.DueDate < GETDATE()
+          AND S.StatusName = 'Active'
+    )
+        SET @HasOverdue = 1;
+    ELSE
+        SET @HasOverdue = 0;
+
+    RETURN @HasOverdue;
+END;
+GO
+
+Go
+CREATE FUNCTION Library.GetMemberActiveLoanCount(@MemberID INT)
+RETURNS INT
+AS
+BEGIN
+    DECLARE @ActiveLoanCount INT;
+
+    SELECT @ActiveLoanCount = COUNT(*)
+    FROM Library.Loans L
+    JOIN Library.LibraryMembers M ON L.MemberID = M.MemberID
+    JOIN Library.MemberAccountStatuses S ON M.AccountStatusID = S.AccountStatusID
+    WHERE L.MemberID = @MemberID
+      AND L.ReturnDate IS NULL
+      AND S.StatusName = 'Active';
+    RETURN @ActiveLoanCount;
+END;
+Go
+CREATE FUNCTION Library.CalculateFineForLoan(@LoanID INT)
+RETURNS DECIMAL(10,2)
+AS
+BEGIN
+    DECLARE @Fine DECIMAL(10,2) = 0;
+    DECLARE @ReturnDate DATE;
+    DECLARE @DueDate DATE;
+    DECLARE @DailyFineRate DECIMAL(10,2) = 2000; 
+    DECLARE @BookPrice DECIMAL(10,2);
+    DECLARE @MemberStatus NVARCHAR(50);
+
+    SELECT 
+        @ReturnDate = L.ReturnDate,
+        @DueDate = L.DueDate,
+        @BookPrice = BC.PurchasePrice,
+        @MemberStatus = S.StatusName
+    FROM Library.Loans L
+    JOIN Library.LibraryMembers M ON L.MemberID = M.MemberID
+    JOIN Library.MemberAccountStatuses S ON M.AccountStatusID = S.AccountStatusID
+    JOIN Library.BookCopies BC ON L.CopyID = BC.CopyID
+    WHERE L.LoanID = @LoanID;
+
+    IF @ReturnDate IS NOT NULL 
+       AND @ReturnDate > @DueDate
+       AND @MemberStatus = 'Active'
+    BEGIN
+        SET @Fine = DATEDIFF(DAY, @DueDate, @ReturnDate) * @DailyFineRate;
+
+        IF @Fine > @BookPrice
+            SET @Fine = @BookPrice;
+    END
+    RETURN @Fine;
+END;
+GO
+CREATE FUNCTION Library.IsBookCopyAvailable(@CopyID INT)
+RETURNS BIT
+AS
+BEGIN
+    DECLARE @IsAvailable BIT = 0;
+    DECLARE @StatusName NVARCHAR(50);
+
+    SELECT @StatusName = S.StatusName
+    FROM Library.BookCopies C
+    JOIN Library.BookCopyStatuses S ON C.CopyStatusID = S.CopyStatusID
+    WHERE C.CopyID = @CopyID;
+
+    IF @StatusName = 'Available' AND NOT EXISTS (
+        SELECT 1
+        FROM Library.Loans
+        WHERE CopyID = @CopyID AND ReturnDate IS NULL
+    )
+    BEGIN
+        SET @IsAvailable = 1;
+    END
+
+    RETURN @IsAvailable;
+END;
+GO
+
+
