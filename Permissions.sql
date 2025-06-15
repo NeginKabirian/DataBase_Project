@@ -1,6 +1,7 @@
 GRANT CONTROL ON SCHEMA :: Education TO EducationAdminRole;
 GRANT SELECT ON SCHEMA :: Library TO EducationAdminRole;
 GRANT EXECUTE ON Education.RegisterStudent TO EducationAdminRole;
+GRANT EXECUTE ON Education.EnrollStudentInCourse TO EducationAdminRole;
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON SCHEMA :: Library TO LibrarianRole;
 GRANT EXECUTE ON SCHEMA :: Library TO LibrarianRole;
@@ -9,7 +10,7 @@ GRANT SELECT ON Education.Majors TO LibrarianRole;
 GRANT SELECT ON Education.StudentStatuses TO LibrarianRole;
 DENY EXECUTE ON Education.RegisterStudent TO LibrarianRole;
 
-
+ 
 GRANT SELECT ON Education.Courses TO StudentRole;
 GRANT SELECT ON Education.Majors TO StudentRole;
 GRANT SELECT ON Education.Departments TO StudentRole;
@@ -26,4 +27,5 @@ DENY INSERT, UPDATE, DELETE ON SCHEMA :: Education TO StudentRole;
 DENY INSERT, UPDATE, DELETE ON SCHEMA :: Library TO StudentRole;
 
 DENY EXECUTE ON Education.RegisterStudent TO StudentRole;
+GRANT EXECUTE ON Education.EnrollStudentInCourse TO StudentRole;
 

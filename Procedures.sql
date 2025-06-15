@@ -118,3 +118,88 @@ BEGIN
     END CATCH
 END;
 GO
+
+IF OBJECT_ID('Education.EnrollStudentInCourse', 'P') IS NOT NULL
+    DROP PROCEDURE Education.EnrollStudentInCourse;
+GO
+
+CREATE PROCEDURE Education.EnrollStudentInCourse
+    @StudentID INT,
+    @OfferedCourseID INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @LogUserID NVARCHAR(128) = SUSER_SNAME(); -- Or get from context_info if passed from app
+
+
+    --  Check if the student and offered course exist
+    IF NOT EXISTS (SELECT 1 FROM Education.Students WHERE StudentID = @StudentID)
+    BEGIN
+        RAISERROR('Student with ID %d does not exist.', 16, 1, @StudentID);
+        RETURN -1;
+    END
+
+    IF NOT EXISTS (SELECT 1 FROM Education.OfferedCourses WHERE OfferedCourseID = @OfferedCourseID)
+    BEGIN
+        RAISERROR('Offered course with ID %d does not exist.', 16, 1, @OfferedCourseID);
+        RETURN -2;
+    END
+
+    --Check if student is already enrolled in this course
+    IF EXISTS (SELECT 1 FROM Education.Enrollments WHERE StudentID = @StudentID AND OfferedCourseID = @OfferedCourseID)
+    BEGIN
+        RAISERROR('You are already enrolled in this course.', 16, 1);
+        RETURN -3;
+    END
+
+    -- Check for available capacity
+    DECLARE @AvailableCapacity INT = Education.GetOfferedCourseAvailableCapacity(@OfferedCourseID);
+    IF @AvailableCapacity <= 0
+    BEGIN
+        RAISERROR('This course offering is full. No available capacity.', 16, 1);
+        RETURN -4;
+    END
+
+    --  Check if prerequisites are met
+    DECLARE @CourseID INT = (SELECT CourseID FROM Education.OfferedCourses WHERE OfferedCourseID = @OfferedCourseID);
+    IF (Education.CheckCoursePrerequisitesMet(@StudentID, @CourseID) = 0)
+    BEGIN
+        RAISERROR('Prerequisites for this course have not been met.', 16, 1);
+        RETURN -5;
+    end
+
+	BEGIN TRY
+        DECLARE @EnrolledStatusID INT = (SELECT EnrollmentStatusID FROM Education.EnrollmentStatuses WHERE TRIM(StatusName) = 'Enrolled');
+        IF @EnrolledStatusID IS NULL
+        BEGIN
+            RAISERROR('Default "Enrolled" status not found in lookup table.', 16, 1);
+            RETURN -99;
+        END
+
+        INSERT INTO Education.Enrollments (StudentID, OfferedCourseID, EnrollmentDate, EnrollmentStatusID)
+        VALUES (@StudentID, @OfferedCourseID, GETDATE(), @EnrolledStatusID);
+
+        DECLARE @NewEnrollmentID INT = SCOPE_IDENTITY();
+        PRINT 'Enrollment successful! Enrollment ID: ' + CAST(@NewEnrollmentID AS VARCHAR);
+
+       
+        INSERT INTO Education.EducationLog (EventType, Description, AffectedTable, AffectedRecordID, UserID)
+        VALUES ('CourseEnrolled',
+                'Student ID ' + CAST(@StudentID AS VARCHAR) + ' enrolled in OfferedCourse ID ' + CAST(@OfferedCourseID AS VARCHAR),
+                'Education.Enrollments',
+                CAST(@NewEnrollmentID AS VARCHAR),
+                @LogUserID);
+
+        RETURN 0;
+    END TRY
+    BEGIN CATCH
+        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
+        INSERT INTO Education.EducationLog (EventType, Description, UserID)
+        VALUES ('CourseEnrollmentFailed',
+                'Failed to enroll Student ID ' + CAST(@StudentID AS VARCHAR) + ' in OfferedCourse ID ' + CAST(@OfferedCourseID AS VARCHAR) + '. Error: ' + @ErrorMessage,
+                @LogUserID);
+        RAISERROR(@ErrorMessage, 16, 1); 
+        RETURN -100;
+    END CATCH
+END;
+GO
