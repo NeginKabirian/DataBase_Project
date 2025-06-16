@@ -37,11 +37,6 @@ BEGIN
 		INSERT INTO Library.LibraryMembers (StudentID, LibraryCardNumber, RegistrationDate, AccountStatusID, Notes)
             VALUES (@StudentID, @GeneratedLibraryCardNumber, GETDATE(), @DefaultActiveStatusID, 'Auto-created from Education system for ' + @FirstName + ' ' + @LastName + '.');
 
-		DECLARE @NewMemberID INT = SCOPE_IDENTITY();
-
-            INSERT INTO Library.LibraryLog (EventType, Description, AffectedTable, AffectedRecordID, UserID) VALUES 
-			('MemberAccountCreated', 'Lib account for ' + @FirstName + ' ' + @LastName + ' (EduStudentID: ' + CAST(@StudentID AS VARCHAR) + ')', 
-			'Library.LibraryMembers', CAST(@NewMemberID AS VARCHAR), @LogUserID);
 
         END TRY
 		BEGIN CATCH
@@ -53,46 +48,6 @@ BEGIN
 END;
 GO
 
-IF OBJECT_ID('Library.UpdateMemberStatusFromEducation', 'P') IS NOT NULL
-    DROP PROCEDURE Library.UpdateMemberStatusFromEducation;
-GO
-
-CREATE PROCEDURE Library.UpdateMemberStatusFromEducation
-    @StudentID INT
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @StudentStatusName NVARCHAR(50);
-    DECLARE @TargetAccountStatusID INT;
-
-    
-    SELECT @StudentStatusName = SS.StatusName
-    FROM Education.Students S
-    JOIN Education.StudentStatuses SS ON S.StudentStatusID = SS.StudentStatusID
-    WHERE S.StudentID = @StudentID;
-
-    
-    IF @StudentStatusName IN ('Graduated', 'Withdrawn', 'Expelled')
-    BEGIN
-        SELECT @TargetAccountStatusID = AccountStatusID FROM Library.MemberAccountStatuses WHERE TRIM(StatusName) = 'Inactive';
-    END
-    ELSE IF @StudentStatusName = 'Active'
-    BEGIN
-        SELECT @TargetAccountStatusID = AccountStatusID FROM Library.MemberAccountStatuses WHERE TRIM(StatusName) = 'Active';
-    END
- 
-
-    
-    IF @TargetAccountStatusID IS NOT NULL
-    BEGIN
-        UPDATE Library.LibraryMembers
-        SET AccountStatusID = @TargetAccountStatusID
-        WHERE StudentID = @StudentID;
-
-        PRINT 'Library account status updated for StudentID: ' + CAST(@StudentID AS VARCHAR);
-    END
-END;
-GO
 
 
 IF OBJECT_ID('Education.RecordStudentGrade', 'P') IS NOT NULL
@@ -147,10 +102,6 @@ BEGIN
 
         PRINT 'Grade recorded successfully for EnrollmentID: ' + CAST(@EnrollmentID AS VARCHAR);
 
-        -- Log the event
-        INSERT INTO Education.EducationLog (EventType, Description, AffectedTable, AffectedRecordID, UserID)
-        VALUES ('GradeRecorded', 'Grade ' + @Grade + ' recorded for EnrollmentID ' + CAST(@EnrollmentID AS VARCHAR), 'Education.Enrollments', @EnrollmentID, @LogUserID);
-
     END TRY
     BEGIN CATCH
         DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
@@ -192,9 +143,7 @@ BEGIN
 
         PRINT 'Student''s major updated successfully.';
 
-        -- Log the event
-        INSERT INTO Education.EducationLog (EventType, Description, AffectedTable, AffectedRecordID, UserID)
-        VALUES ('MajorUpdated', 'Major for StudentID ' + CAST(@StudentID AS VARCHAR) + ' updated to MajorID ' + CAST(@NewMajorID AS VARCHAR), 'Education.Students', @StudentID, @LogUserID);
+     
     END TRY
     BEGIN CATCH
         DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
@@ -241,8 +190,7 @@ BEGIN
 
         PRINT 'Student graduation processed successfully.';
 
-        INSERT INTO Education.EducationLog (EventType, Description, AffectedTable, AffectedRecordID, UserID)
-        VALUES ('StudentGraduated', 'Student ID ' + CAST(@StudentID AS VARCHAR) + ' status changed to Graduated.', 'Education.Students', @StudentID, @LogUserID);
+
     END TRY
     BEGIN CATCH
         DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
@@ -294,8 +242,6 @@ BEGIN
         IF @NewStudentID IS NOT NULL
         BEGIN
             PRINT 'Student registered successfully. New StudentID: ' + CAST(@NewStudentID AS VARCHAR);
-            INSERT INTO Education.EducationLog (EventType, Description, AffectedTable, AffectedRecordID, UserID)
-            VALUES ('StudentRegistered', 'New student registered: ' + @FirstName + ' ' + @LastName, 'Education.Students', CAST(@NewStudentID AS VARCHAR), @LogUserID);
             SELECT @NewStudentID AS NewStudentID;
 			RETURN 0; -- Success
         END
@@ -379,13 +325,6 @@ BEGIN
         DECLARE @NewEnrollmentID INT = SCOPE_IDENTITY();
         PRINT 'Enrollment successful! Enrollment ID: ' + CAST(@NewEnrollmentID AS VARCHAR);
 
-       
-        INSERT INTO Education.EducationLog (EventType, Description, AffectedTable, AffectedRecordID, UserID)
-        VALUES ('CourseEnrolled',
-                'Student ID ' + CAST(@StudentID AS VARCHAR) + ' enrolled in OfferedCourse ID ' + CAST(@OfferedCourseID AS VARCHAR),
-                'Education.Enrollments',
-                CAST(@NewEnrollmentID AS VARCHAR),
-                @LogUserID);
 
         RETURN 0;
     END TRY
