@@ -53,6 +53,47 @@ BEGIN
 END;
 GO
 
+IF OBJECT_ID('Library.UpdateMemberStatusFromEducation', 'P') IS NOT NULL
+    DROP PROCEDURE Library.UpdateMemberStatusFromEducation;
+GO
+
+CREATE PROCEDURE Library.UpdateMemberStatusFromEducation
+    @StudentID INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @StudentStatusName NVARCHAR(50);
+    DECLARE @TargetAccountStatusID INT;
+
+    
+    SELECT @StudentStatusName = SS.StatusName
+    FROM Education.Students S
+    JOIN Education.StudentStatuses SS ON S.StudentStatusID = SS.StudentStatusID
+    WHERE S.StudentID = @StudentID;
+
+    
+    IF @StudentStatusName IN ('Graduated', 'Withdrawn', 'Expelled')
+    BEGIN
+        SELECT @TargetAccountStatusID = AccountStatusID FROM Library.MemberAccountStatuses WHERE TRIM(StatusName) = 'Inactive';
+    END
+    ELSE IF @StudentStatusName = 'Active'
+    BEGIN
+        SELECT @TargetAccountStatusID = AccountStatusID FROM Library.MemberAccountStatuses WHERE TRIM(StatusName) = 'Active';
+    END
+ 
+
+    
+    IF @TargetAccountStatusID IS NOT NULL
+    BEGIN
+        UPDATE Library.LibraryMembers
+        SET AccountStatusID = @TargetAccountStatusID
+        WHERE StudentID = @StudentID;
+
+        PRINT 'Library account status updated for StudentID: ' + CAST(@StudentID AS VARCHAR);
+    END
+END;
+GO
+
 
 IF OBJECT_ID('Education.RecordStudentGrade', 'P') IS NOT NULL
     DROP PROCEDURE Education.RecordStudentGrade;
@@ -190,8 +231,6 @@ BEGIN
         -- This UPDATE will fire the TR_Students_AfterUpdate_ManageLibraryAccountStatus trigger
         UPDATE Education.Students
         SET StudentStatusID = @GraduatedStatusID
-        -- Optionally, you can add a GraduationDate column to the Students table and set it here
-        -- SET StudentStatusID = @GraduatedStatusID, GraduationDate = @GraduationDate
         WHERE StudentID = @StudentID;
 
         IF @@ROWCOUNT = 0
