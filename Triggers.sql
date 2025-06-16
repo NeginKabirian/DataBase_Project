@@ -1,4 +1,4 @@
-IF OBJECT_ID('Education.TR_Students_ValidateAndInsert', 'TR') IS NOT NULL
+﻿IF OBJECT_ID('Education.TR_Students_ValidateAndInsert', 'TR') IS NOT NULL
     DROP TRIGGER Education.TR_Students_ValidateAndInsert;
 GO
 
@@ -106,3 +106,53 @@ BEGIN
     DEALLOCATE student_cursor;
 END;
 GO
+CREATE TRIGGER trg_UpdateLibraryAccountAndLog
+ON Education.Students
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @InactiveStatusID INT = (
+        SELECT AccountStatusID FROM Library.MemberAccountStatuses WHERE StatusName = 'Inactive'
+    );
+    DECLARE @ActiveStatusID INT = (
+        SELECT AccountStatusID FROM Library.MemberAccountStatuses WHERE StatusName = 'Active'
+    );
+    UPDATE LM
+    SET LM.AccountStatusID = @InactiveStatusID
+    FROM Library.LibraryMembers AS LM
+    INNER JOIN inserted AS i ON LM.StudentID = i.StudentID
+    INNER JOIN deleted AS d ON i.StudentID = d.StudentID
+    INNER JOIN Education.StudentStatuses ss ON i.StudentStatusID = ss.StudentStatusID
+    WHERE ss.StatusName IN ('Graduated', 'Withdrawn', 'Expelled')
+      AND i.StudentStatusID <> d.StudentStatusID;
+
+    UPDATE LM
+    SET LM.AccountStatusID = @ActiveStatusID
+    FROM Library.LibraryMembers AS LM
+    INNER JOIN inserted AS i ON LM.StudentID = i.StudentID
+    INNER JOIN deleted AS d ON i.StudentID = d.StudentID
+    INNER JOIN Education.StudentStatuses ss ON i.StudentStatusID = ss.StudentStatusID
+    WHERE ss.StatusName = 'Active'
+      AND i.StudentStatusID <> d.StudentStatusID;
+
+    INSERT INTO Library.LibraryLog (
+        EventType,
+        Description,
+        AffectedTable,
+        AffectedRecordID,
+        UserID
+    )
+    SELECT
+        'UPDATE',
+        'Student status changed from "' + dss.StatusName + '" to "' + iss.StatusName + '"',
+        'Education.Students',
+        CAST(i.StudentID AS varchar),
+        SUSER_SNAME()
+    FROM inserted i
+    JOIN deleted d ON i.StudentID = d.StudentID
+    JOIN Education.StudentStatuses dss ON d.StudentStatusID = dss.StudentStatusID
+    JOIN Education.StudentStatuses iss ON i.StudentStatusID = iss.StudentStatusID
+    WHERE i.StudentStatusID <> d.StudentStatusID;
+END
