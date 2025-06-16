@@ -40,6 +40,104 @@ BEGIN
 END;
 GO
 
+IF OBJECT_ID('Education.TR_Courses_LogChanges', 'TR') IS NOT NULL
+    DROP TRIGGER Education.TR_Courses_LogChanges;
+GO
+
+CREATE TRIGGER Education.TR_Courses_LogChanges
+ON Education.Courses
+AFTER INSERT, UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @Action CHAR(1);
+    DECLARE @LogDescription NVARCHAR(MAX);
+    DECLARE @UserID NVARCHAR(128) = SUSER_SNAME();
+
+    IF EXISTS (SELECT * FROM inserted) AND EXISTS (SELECT * FROM deleted) SET @Action = 'U';
+    ELSE IF EXISTS (SELECT * FROM inserted) SET @Action = 'I';
+    ELSE SET @Action = 'D';
+
+    IF @Action = 'I'
+        INSERT INTO Education.EducationLog (EventType, Description, AffectedTable, AffectedRecordID, UserID)
+        SELECT 'CourseCreated', 'New course created: ' + i.CourseName + ' (' + i.CourseCode + ')', 'Education.Courses', i.CourseID, @UserID
+        FROM inserted i;
+
+    IF @Action = 'U'
+        INSERT INTO Education.EducationLog (EventType, Description, AffectedTable, AffectedRecordID, UserID)
+        SELECT 'CourseUpdated', 'Course ' + i.CourseName + ' (ID: ' + CAST(i.CourseID AS VARCHAR) + ') was updated.', 'Education.Courses', i.CourseID, @UserID
+        FROM inserted i;
+
+    IF @Action = 'D'
+        INSERT INTO Education.EducationLog (EventType, Description, AffectedTable, AffectedRecordID, UserID)
+        SELECT 'CourseDeleted', 'Course ' + d.CourseName + ' (ID: ' + CAST(d.CourseID AS VARCHAR) + ') was deleted.', 'Education.Courses', d.CourseID, @UserID
+        FROM deleted d;
+END;
+GO
+
+IF OBJECT_ID('Education.TR_Enrollments_LogChanges', 'TR') IS NOT NULL
+    DROP TRIGGER Education.TR_Enrollments_LogChanges;
+GO
+
+CREATE TRIGGER Education.TR_Enrollments_LogChanges
+ON Education.Enrollments
+AFTER INSERT, UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @Action CHAR(1);
+    DECLARE @LogDescription NVARCHAR(MAX);
+    DECLARE @UserID NVARCHAR(128) = SUSER_SNAME();
+
+    
+    IF EXISTS (SELECT * FROM inserted) AND EXISTS (SELECT * FROM deleted)
+        SET @Action = 'U'; -- Update
+    ELSE IF EXISTS (SELECT * FROM inserted)
+        SET @Action = 'I'; -- Insert
+    ELSE
+        SET @Action = 'D'; -- Delete
+
+    
+    IF @Action = 'I'
+    BEGIN
+        INSERT INTO Education.EducationLog (EventType, Description, AffectedTable, AffectedRecordID, UserID)
+        SELECT
+            'EnrollmentCreated',
+            'New enrollment for StudentID: ' + CAST(i.StudentID AS VARCHAR) + ' in OfferedCourseID: ' + CAST(i.OfferedCourseID AS VARCHAR),
+            'Education.Enrollments',
+            i.EnrollmentID,
+            @UserID
+        FROM inserted i;
+    END
+
+   
+    IF @Action = 'U'
+    BEGIN
+        INSERT INTO Education.EducationLog (EventType, Description, AffectedTable, AffectedRecordID, UserID)
+        SELECT
+            'EnrollmentUpdated',
+            'EnrollmentID ' + CAST(i.EnrollmentID AS VARCHAR) + ' updated. Grade changed from "' + ISNULL(d.Grade, 'NULL') + '" to "' + ISNULL(i.Grade, 'NULL') + '". Status changed from ' + CAST(d.EnrollmentStatusID AS VARCHAR) + ' to ' + CAST(i.EnrollmentStatusID AS VARCHAR) + '.',
+            'Education.Enrollments',
+            i.EnrollmentID,
+            @UserID
+        FROM inserted i
+        JOIN deleted d ON i.EnrollmentID = d.EnrollmentID;
+    END
+
+    
+    IF @Action = 'D'
+    BEGIN
+        INSERT INTO Education.EducationLog (EventType, Description, AffectedTable, AffectedRecordID, UserID)
+        SELECT
+            'EnrollmentDeleted',
+            'Enrollment record for StudentID: ' + CAST(d.StudentID AS VARCHAR) + ' and OfferedCourseID: ' + CAST(d.OfferedCourseID AS VARCHAR) + ' was deleted.',
+            'Education.Enrollments',
+            d.EnrollmentID,
+            @UserID
+        FROM deleted d;
+    END
+END;
+GO
 
 
 IF OBJECT_ID('Education.TR_Students_AfterInsert_CreateLibraryAccount', 'TR') IS NOT NULL
@@ -106,6 +204,93 @@ BEGIN
     DEALLOCATE student_cursor;
 END;
 GO
+
+IF OBJECT_ID('Education.TR_Students_LogChanges', 'TR') IS NOT NULL
+    DROP TRIGGER Education.TR_Students_LogChanges;
+GO
+
+CREATE TRIGGER Education.TR_Students_LogChanges
+ON Education.Students
+AFTER INSERT, UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @Action CHAR(1);
+    DECLARE @UserID NVARCHAR(128) = SUSER_SNAME();
+
+    IF EXISTS (SELECT * FROM inserted) AND EXISTS (SELECT * FROM deleted)
+        SET @Action = 'U'; -- Update
+    ELSE IF EXISTS (SELECT * FROM inserted)
+        SET @Action = 'I'; -- Insert
+    ELSE
+        SET @Action = 'D'; -- Delete
+
+    IF @Action = 'I'
+    BEGIN
+        INSERT INTO Education.EducationLog (EventType, Description, AffectedTable, AffectedRecordID, UserID)
+        SELECT
+            'StudentCreated',
+            'New student created: "' + i.FirstName + ' ' + i.LastName + '" with NationalID: ' + i.NationalID,
+            'Education.Students',
+            i.StudentID,
+            @UserID
+        FROM inserted i;
+    END
+
+
+    IF @Action = 'U'
+    BEGIN
+        INSERT INTO Education.EducationLog (EventType, Description, AffectedTable, AffectedRecordID, UserID)
+        SELECT
+            'StudentUpdated', -- EventType for student update
+            'Student record updated for: "' + i.FirstName + ' ' + i.LastName + '". Changes: ' +
+            -- Check if MajorID was changed
+            CASE WHEN i.MajorID <> d.MajorID
+                 THEN 'Major changed. ' ELSE '' END +
+            -- Check if StudentStatusID was changed
+            CASE WHEN i.StudentStatusID <> d.StudentStatusID
+                 THEN 'Status changed from "' + d_ss.StatusName + '" to "' + i_ss.StatusName + '". ' ELSE '' END +
+            -- Check if Email was changed (handling NULLs)
+            CASE WHEN ISNULL(i.Email, '') <> ISNULL(d.Email, '')
+                 THEN 'Email changed. ' ELSE '' END +
+            -- Check if PhoneNumber was changed (handling NULLs)
+            CASE WHEN ISNULL(i.PhoneNumber, '') <> ISNULL(d.PhoneNumber, '')
+                 THEN 'Phone changed. ' ELSE '' END,
+            'Education.Students',
+            i.StudentID,
+            @UserID
+        FROM
+            inserted i
+        JOIN
+            deleted d ON i.StudentID = d.StudentID
+        JOIN
+            Education.StudentStatuses i_ss ON i.StudentStatusID = i_ss.StudentStatusID -- Get new status name
+        JOIN
+            Education.StudentStatuses d_ss ON d.StudentStatusID = d_ss.StudentStatusID -- Get old status name
+        -- This WHERE clause ensures we only log if a meaningful change occurred
+        WHERE
+            i.MajorID <> d.MajorID
+            OR i.StudentStatusID <> d.StudentStatusID
+            OR ISNULL(i.Email, '') <> ISNULL(d.Email, '')
+            OR ISNULL(i.PhoneNumber, '') <> ISNULL(d.PhoneNumber, '');
+    END
+
+
+    IF @Action = 'D'
+    BEGIN
+        INSERT INTO Education.EducationLog (EventType, Description, AffectedTable, AffectedRecordID, UserID)
+        SELECT
+            'StudentDeleted', -- EventType for student deletion
+            'Student record deleted: "' + d.FirstName + ' ' + d.LastName + '" (ID: ' + CAST(d.StudentID AS VARCHAR) + ', NationalID: ' + d.NationalID + ')',
+            'Education.Students',
+            d.StudentID,
+            @UserID
+        FROM deleted d;
+    END
+END;
+GO
+
 CREATE TRIGGER trg_UpdateLibraryAccountAndLog
 ON Education.Students
 AFTER UPDATE
