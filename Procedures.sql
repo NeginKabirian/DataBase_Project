@@ -54,6 +54,164 @@ END;
 GO
 
 
+IF OBJECT_ID('Education.RecordStudentGrade', 'P') IS NOT NULL
+    DROP PROCEDURE Education.RecordStudentGrade;
+GO
+
+CREATE PROCEDURE Education.RecordStudentGrade
+    @EnrollmentID INT,
+    @Grade NVARCHAR(10),
+    @GradedByUserID NVARCHAR(128) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @LogUserID NVARCHAR(128) = ISNULL(@GradedByUserID, SUSER_SNAME());
+    DECLARE @PassedStatusID INT, @FailedStatusID INT, @NewStatusID INT;
+
+    -- Get status IDs
+    SELECT @PassedStatusID = EnrollmentStatusID FROM Education.EnrollmentStatuses WHERE TRIM(StatusName) = 'Passed';
+    SELECT @FailedStatusID = EnrollmentStatusID FROM Education.EnrollmentStatuses WHERE TRIM(StatusName) = 'Failed';
+
+    IF @PassedStatusID IS NULL OR @FailedStatusID IS NULL
+    BEGIN
+        RAISERROR('Lookup statuses "Passed" or "Failed" not found.', 16, 1);
+        RETURN;
+    END
+
+    -- Determine if the student passed or failed based on the grade
+    -- Assuming a passing grade is 10 or higher. Adjust this logic as needed.
+    IF TRY_CAST(@Grade AS DECIMAL(4,2)) >= 10.00
+    BEGIN
+        SET @NewStatusID = @PassedStatusID;
+    END
+    ELSE
+    BEGIN
+        SET @NewStatusID = @FailedStatusID;
+    END
+
+    BEGIN TRY
+        -- Update the grade and the enrollment status
+        UPDATE Education.Enrollments
+        SET
+            Grade = @Grade,
+            EnrollmentStatusID = @NewStatusID
+        WHERE
+            EnrollmentID = @EnrollmentID;
+
+        IF @@ROWCOUNT = 0
+        BEGIN
+            RAISERROR('Enrollment with ID %d not found.', 16, 1, @EnrollmentID);
+            RETURN;
+        END
+
+        PRINT 'Grade recorded successfully for EnrollmentID: ' + CAST(@EnrollmentID AS VARCHAR);
+
+        -- Log the event
+        INSERT INTO Education.EducationLog (EventType, Description, AffectedTable, AffectedRecordID, UserID)
+        VALUES ('GradeRecorded', 'Grade ' + @Grade + ' recorded for EnrollmentID ' + CAST(@EnrollmentID AS VARCHAR), 'Education.Enrollments', @EnrollmentID, @LogUserID);
+
+    END TRY
+    BEGIN CATCH
+        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
+        RAISERROR(@ErrorMessage, 16, 1);
+    END CATCH
+END;
+GO
+
+IF OBJECT_ID('Education.UpdateStudentMajor', 'P') IS NOT NULL
+    DROP PROCEDURE Education.UpdateStudentMajor;
+GO
+
+CREATE PROCEDURE Education.UpdateStudentMajor
+    @StudentID INT,
+    @NewMajorID INT,
+    @UpdatedByUserID NVARCHAR(128) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @LogUserID NVARCHAR(128) = ISNULL(@UpdatedByUserID, SUSER_SNAME());
+
+    -- Validate that the new major exists
+    IF NOT EXISTS (SELECT 1 FROM Education.Majors WHERE MajorID = @NewMajorID)
+    BEGIN
+        RAISERROR('New MajorID %d does not exist.', 16, 1, @NewMajorID);
+        RETURN;
+    END
+
+    BEGIN TRY
+        UPDATE Education.Students
+        SET MajorID = @NewMajorID
+        WHERE StudentID = @StudentID;
+
+        IF @@ROWCOUNT = 0
+        BEGIN
+            RAISERROR('Student with ID %d not found.', 16, 1, @StudentID);
+            RETURN;
+        END
+
+        PRINT 'Student''s major updated successfully.';
+
+        -- Log the event
+        INSERT INTO Education.EducationLog (EventType, Description, AffectedTable, AffectedRecordID, UserID)
+        VALUES ('MajorUpdated', 'Major for StudentID ' + CAST(@StudentID AS VARCHAR) + ' updated to MajorID ' + CAST(@NewMajorID AS VARCHAR), 'Education.Students', @StudentID, @LogUserID);
+    END TRY
+    BEGIN CATCH
+        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
+        RAISERROR(@ErrorMessage, 16, 1);
+    END CATCH
+END;
+GO
+
+
+IF OBJECT_ID('Education.ProcessStudentGraduation', 'P') IS NOT NULL
+    DROP PROCEDURE Education.ProcessStudentGraduation;
+GO
+
+CREATE PROCEDURE Education.ProcessStudentGraduation
+    @StudentID INT,
+    @GraduationDate DATE,
+    @ProcessedByUserID NVARCHAR(128) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @LogUserID NVARCHAR(128) = ISNULL(@ProcessedByUserID, SUSER_SNAME());
+    DECLARE @GraduatedStatusID INT;
+
+    -- Get the ID for 'Graduated' status
+    SELECT @GraduatedStatusID = StudentStatusID FROM Education.StudentStatuses WHERE TRIM(StatusName) = 'Graduated';
+
+    IF @GraduatedStatusID IS NULL
+    BEGIN
+        RAISERROR('Lookup status "Graduated" not found.', 16, 1);
+        RETURN;
+    END
+
+    BEGIN TRY
+        -- This UPDATE will fire the TR_Students_AfterUpdate_ManageLibraryAccountStatus trigger
+        UPDATE Education.Students
+        SET StudentStatusID = @GraduatedStatusID
+        -- Optionally, you can add a GraduationDate column to the Students table and set it here
+        -- SET StudentStatusID = @GraduatedStatusID, GraduationDate = @GraduationDate
+        WHERE StudentID = @StudentID;
+
+        IF @@ROWCOUNT = 0
+        BEGIN
+            RAISERROR('Student with ID %d not found.', 16, 1, @StudentID);
+            RETURN;
+        END
+
+        PRINT 'Student graduation processed successfully.';
+
+        INSERT INTO Education.EducationLog (EventType, Description, AffectedTable, AffectedRecordID, UserID)
+        VALUES ('StudentGraduated', 'Student ID ' + CAST(@StudentID AS VARCHAR) + ' status changed to Graduated.', 'Education.Students', @StudentID, @LogUserID);
+    END TRY
+    BEGIN CATCH
+        DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
+        RAISERROR(@ErrorMessage, 16, 1);
+    END CATCH
+END;
+GO
+
 IF OBJECT_ID('Education.RegisterStudent', 'P') IS NOT NULL
     DROP PROCEDURE Education.RegisterStudent;
 GO
