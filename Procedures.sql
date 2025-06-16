@@ -294,3 +294,50 @@ BEGIN
 
 END;
 GO
+
+CREATE PROCEDURE RecommendBooksToStudent
+    @StudentID INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    WITH CurrentStudentBooks AS (
+        SELECT DISTINCT BC.BookID
+        FROM Library.Loans L
+        JOIN Library.BookCopies BC ON L.CopyID = BC.CopyID
+        JOIN Library.LibraryMembers LM ON LM.MemberID = L.MemberID
+        WHERE LM.StudentID = @StudentID
+    ),
+
+ 
+    LoanBookMember AS (
+        SELECT DISTINCT BC.BookID, LM.StudentID
+        FROM Library.Loans L
+        JOIN Library.BookCopies BC ON L.CopyID = BC.CopyID
+        JOIN Library.LibraryMembers LM ON LM.MemberID = L.MemberID
+    ),
+
+    
+    SimilarStudents AS (
+        SELECT LBM.StudentID
+        FROM LoanBookMember LBM
+        JOIN CurrentStudentBooks CSB ON LBM.BookID = CSB.BookID
+        WHERE LBM.StudentID != @StudentID
+        GROUP BY LBM.StudentID
+        HAVING COUNT(DISTINCT LBM.BookID) >= 2
+    ),
+
+ 
+    RecommendedBooks AS (
+        SELECT LBM.BookID
+        FROM LoanBookMember LBM
+        JOIN SimilarStudents SS ON LBM.StudentID = SS.StudentID
+        WHERE LBM.BookID NOT IN (SELECT BookID FROM CurrentStudentBooks)
+    )
+
+    SELECT TOP 3 B.BookID, B.Title, COUNT(*) AS Frequency
+    FROM RecommendedBooks RB
+    JOIN Library.Books B ON RB.BookID = B.BookID
+    GROUP BY B.BookID, B.Title
+    ORDER BY Frequency DESC;
+END
