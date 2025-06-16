@@ -203,3 +203,94 @@ BEGIN
     END CATCH
 END;
 GO
+
+IF OBJECT_ID('Education.SuggestCoursesForStudent', 'P') IS NOT NULL
+    DROP PROCEDURE Education.SuggestCoursesForStudent;
+GO
+
+CREATE PROCEDURE Education.SuggestCoursesForStudent
+    @StudentID INT,
+    @TargetSemesterID INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+	 DECLARE @MajorID INT;
+    DECLARE @PassedStatusID INT;
+
+    
+    SELECT @MajorID = MajorID FROM Education.Students WHERE StudentID = @StudentID;
+    IF @MajorID IS NULL
+    BEGIN
+        RAISERROR('Student with ID %d not found.', 16, 1, @StudentID);
+        RETURN;
+    END
+
+	SELECT @PassedStatusID = EnrollmentStatusID FROM Education.EnrollmentStatuses WHERE TRIM(StatusName) = 'Passed';
+    IF @PassedStatusID IS NULL
+    BEGIN
+        RAISERROR('Lookup value for "Passed" status not found in EnrollmentStatuses.', 16, 1);
+        RETURN;
+    END
+	
+	DECLARE @AllMajorCourses TABLE (CourseID INT PRIMARY KEY);
+    DECLARE @PassedCourses TABLE (CourseID INT PRIMARY KEY);
+    DECLARE @RemainingCourses TABLE (CourseID INT PRIMARY KEY);
+    DECLARE @EligibleCourses TABLE (CourseID INT PRIMARY KEY);
+	-- Get all courses required for the student's major
+	INSERT INTO @AllMajorCourses (CourseID)
+    SELECT CourseID
+    FROM Education.Curriculum
+    WHERE MajorID = @MajorID;
+	-- Get all courses the student has already passed
+	INSERT INTO @PassedCourses (CourseID)
+    SELECT DISTINCT OC.CourseID
+    FROM Education.Enrollments E
+    JOIN Education.OfferedCourses OC ON E.OfferedCourseID = OC.OfferedCourseID
+    WHERE E.StudentID = @StudentID AND E.EnrollmentStatusID = @PassedStatusID;
+	--Determine remaining courses by removing passed courses
+	INSERT INTO @RemainingCourses (CourseID)
+    SELECT CourseID FROM @AllMajorCourses
+    EXCEPT
+    SELECT CourseID FROM @PassedCourses;
+
+	-- Filter remaining courses by checking prerequisites
+    -- Only keep courses for which the student has met all prerequisites.
+
+	INSERT INTO @EligibleCourses (CourseID)
+    SELECT R.CourseID
+    FROM @RemainingCourses R
+    WHERE Education.CheckCoursePrerequisitesMet(@StudentID, R.CourseID) = 1;
+
+	-- Find which eligible courses are offered in the target semester
+    -- and present them in a prioritized order.
+
+	SELECT
+        C.CourseCode,
+        C.CourseName,
+        C.Credits,
+        CUR.SuggestedTerm,
+        CUR.Priority,
+        OC.OfferedCourseID, 
+        P.FirstName + ' ' + P.LastName AS ProfessorName,
+        OC.ScheduleInfo
+    FROM
+        @EligibleCourses EC
+    JOIN
+        Education.OfferedCourses OC ON EC.CourseID = OC.CourseID 
+    JOIN
+        Education.Courses C ON OC.CourseID = C.CourseID 
+    JOIN
+        Education.Curriculum CUR ON EC.CourseID = CUR.CourseID AND CUR.MajorID = @MajorID 
+    LEFT JOIN
+        Education.Professors P ON OC.ProfessorID = P.ProfessorID 
+    WHERE
+        OC.SemesterID = @TargetSemesterID
+        AND Education.GetOfferedCourseAvailableCapacity(OC.OfferedCourseID) > 0 
+    ORDER BY
+        CUR.SuggestedTerm ASC,
+        CUR.Priority ASC,   
+        C.CourseName ASC;      
+
+END;
+GO
