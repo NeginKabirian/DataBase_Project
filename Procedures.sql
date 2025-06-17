@@ -156,32 +156,35 @@ END;
 GO
 
 
-IF OBJECT_ID('Education.ProcessStudentGraduation', 'P') IS NOT NULL
-    DROP PROCEDURE Education.ProcessStudentGraduation;
+IF OBJECT_ID('Education.UpdateStudentStatus', 'P') IS NOT NULL
+    DROP PROCEDURE Education.UpdateStudentStatus;
 GO
 
-CREATE PROCEDURE Education.ProcessStudentGraduation
+CREATE PROCEDURE Education.UpdateStudentStatus
     @StudentID INT,
-    @GraduationDate DATE,
+    @NewStatusName NVARCHAR(50), -- Input is now the name of the status, e.g., 'Graduated', 'Withdrawn'
     @ProcessedByUserID NVARCHAR(128) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
     DECLARE @LogUserID NVARCHAR(128) = ISNULL(@ProcessedByUserID, SUSER_SNAME());
-    DECLARE @GraduatedStatusID INT;
+    DECLARE @NewStatusID INT;
 
-    
-    SELECT @GraduatedStatusID = StudentStatusID FROM Education.StudentStatuses WHERE TRIM(StatusName) = 'Graduated';
+  
+    SELECT @NewStatusID = StudentStatusID
+    FROM Education.StudentStatuses
+    WHERE TRIM(StatusName) = TRIM(@NewStatusName);
 
-    IF @GraduatedStatusID IS NULL
+    IF @NewStatusID IS NULL
     BEGIN
-        RAISERROR('Lookup status "Graduated" not found.', 16, 1);
+        RAISERROR('The status "%s" was not found in Education.StudentStatuses.', 16, 1, @NewStatusName);
         RETURN;
     END
 
     BEGIN TRY
+      
         UPDATE Education.Students
-        SET StudentStatusID = @GraduatedStatusID
+        SET StudentStatusID = @NewStatusID
         WHERE StudentID = @StudentID;
 
         IF @@ROWCOUNT = 0
@@ -190,14 +193,16 @@ BEGIN
             RETURN;
         END
 
-        PRINT 'Student graduation processed successfully.';
+        PRINT 'Student status for StudentID ' + CAST(@StudentID AS VARCHAR) + ' successfully updated to "' + @NewStatusName + '".';
 
-
+   
     END TRY
     BEGIN CATCH
         DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-		INSERT INTO Education.EducationLog (EventType, Description, AffectedTable, AffectedRecordID, UserID)
-        VALUES ('StudentGraduationFailed', 'Failed to process graduation for StudentID ' + CAST(@StudentID AS VARCHAR) + '. Error: ' + @ErrorMessage, 'Education.Students', @StudentID, @LogUserID);
+       
+        INSERT INTO Education.EducationLog (EventType, Description, AffectedTable, AffectedRecordID, UserID)
+        VALUES ('StudentStatusUpdateFailed', 'Failed to update status for StudentID ' + CAST(@StudentID AS VARCHAR) + ' to "' + @NewStatusName + '". Error: ' + @ErrorMessage, 'Education.Students', @StudentID, @LogUserID);
+       
         RAISERROR(@ErrorMessage, 16, 1);
     END CATCH
 END;
@@ -276,7 +281,7 @@ CREATE PROCEDURE Education.EnrollStudentInCourse
 AS
 BEGIN
     SET NOCOUNT ON;
-    DECLARE @LogUserID NVARCHAR(128) = SUSER_SNAME(); -- Or get from context_info if passed from app
+    DECLARE @LogUserID NVARCHAR(128) = SUSER_SNAME(); 
 
 
     --  Check if the student and offered course exist
