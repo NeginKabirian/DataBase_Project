@@ -19,12 +19,12 @@ BEGIN
 
 	IF @DefaultActiveStatusID IS NULL
 	BEGIN
-		RAISERROR ('Default "Active" status not found in Library.MemberAccountStatuses. Cannot create library member.', 16, 1);
 
 		INSERT INTO Library.LibraryLog (EventType, Description, UserID) VALUES 
 		('MemberAccountCreationFailed', 'Failed to find "Active" status for EduStudentID: '
 		+ CAST(@StudentID AS VARCHAR), @LogUserID);
 
+		RAISERROR ('Default "Active" status not found in Library.MemberAccountStatuses. Cannot create library member.', 16, 1);
 		RETURN;
     END
 
@@ -74,8 +74,7 @@ BEGIN
         RETURN;
     END
 
-    -- Determine if the student passed or failed based on the grade
-    -- Assuming a passing grade is 10 or higher. Adjust this logic as needed.
+
     IF TRY_CAST(@Grade AS DECIMAL(4,2)) >= 10.00
     BEGIN
         SET @NewStatusID = @PassedStatusID;
@@ -86,7 +85,7 @@ BEGIN
     END
 
     BEGIN TRY
-        -- Update the grade and the enrollment status
+        
         UPDATE Education.Enrollments
         SET
             Grade = @Grade,
@@ -105,6 +104,8 @@ BEGIN
     END TRY
     BEGIN CATCH
         DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
+        INSERT INTO Education.EducationLog (EventType, Description, AffectedTable, AffectedRecordID, UserID)
+        VALUES ('GradeRecordFailed', 'Failed to record grade for EnrollmentID ' + CAST(@EnrollmentID AS VARCHAR) + '. Error: ' + @ErrorMessage, 'Education.Enrollments', @EnrollmentID, @LogUserID);
         RAISERROR(@ErrorMessage, 16, 1);
     END CATCH
 END;
@@ -147,6 +148,8 @@ BEGIN
     END TRY
     BEGIN CATCH
         DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
+		INSERT INTO Education.EducationLog (EventType, Description, AffectedTable, AffectedRecordID, UserID)
+        VALUES ('MajorUpdateFailed', 'Failed to update major for StudentID ' + CAST(@StudentID AS VARCHAR) + '. Error: ' + @ErrorMessage, 'Education.Students', @StudentID, @LogUserID);
         RAISERROR(@ErrorMessage, 16, 1);
     END CATCH
 END;
@@ -167,7 +170,7 @@ BEGIN
     DECLARE @LogUserID NVARCHAR(128) = ISNULL(@ProcessedByUserID, SUSER_SNAME());
     DECLARE @GraduatedStatusID INT;
 
-    -- Get the ID for 'Graduated' status
+    
     SELECT @GraduatedStatusID = StudentStatusID FROM Education.StudentStatuses WHERE TRIM(StatusName) = 'Graduated';
 
     IF @GraduatedStatusID IS NULL
@@ -177,7 +180,6 @@ BEGIN
     END
 
     BEGIN TRY
-        -- This UPDATE will fire the TR_Students_AfterUpdate_ManageLibraryAccountStatus trigger
         UPDATE Education.Students
         SET StudentStatusID = @GraduatedStatusID
         WHERE StudentID = @StudentID;
@@ -194,6 +196,8 @@ BEGIN
     END TRY
     BEGIN CATCH
         DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
+		INSERT INTO Education.EducationLog (EventType, Description, AffectedTable, AffectedRecordID, UserID)
+        VALUES ('StudentGraduationFailed', 'Failed to process graduation for StudentID ' + CAST(@StudentID AS VARCHAR) + '. Error: ' + @ErrorMessage, 'Education.Students', @StudentID, @LogUserID);
         RAISERROR(@ErrorMessage, 16, 1);
     END CATCH
 END;
