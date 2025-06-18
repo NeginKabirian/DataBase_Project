@@ -105,8 +105,13 @@ BEGIN
     CLOSE student_cursor;
     DEALLOCATE student_cursor;
 END;
+--Library
 GO
-CREATE TRIGGER trg_UpdateLibraryAccountAndLog
+IF OBJECT_ID('Education.Trg_UpdateLibraryAccountAndLog', 'TR') IS NOT NULL
+    DROP TRIGGER Education.Trg_UpdateLibraryAccountAndLog;
+GO
+
+CREATE TRIGGER Education.Trg_UpdateLibraryAccountAndLog
 ON Education.Students
 AFTER UPDATE
 AS
@@ -156,3 +161,28 @@ BEGIN
     JOIN Education.StudentStatuses iss ON i.StudentStatusID = iss.StudentStatusID
     WHERE i.StudentStatusID <> d.StudentStatusID;
 END
+
+-- Updates the book copy status to "Borrowed" after a new loan is inserted.
+IF OBJECT_ID('Library.TR_Loans_AfterInsert_UpdateBookCopyStatusToBorrowed', 'TR') IS NOT NULL
+    DROP TRIGGER Library.TR_Loans_AfterInsert_UpdateBookCopyStatusToBorrowed;
+GO
+
+CREATE TRIGGER [Library].[TR_Loans_AfterInsert_UpdateBookCopyStatusToBorrowed]
+ON [Library].[Loans]
+AFTER INSERT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @BorrowedStatusID INT;
+    SELECT @BorrowedStatusID = CopyStatusID 
+    FROM Library.BookCopyStatuses 
+    WHERE StatusName = 'Borrowed';
+    IF @BorrowedStatusID IS NOT NULL
+    BEGIN
+        UPDATE bc
+        SET bc.CopyStatusID = @BorrowedStatusID
+        FROM [Library].[BookCopies] AS bc
+        INNER JOIN inserted AS i ON bc.CopyID = i.CopyID;
+    END
+END
+GO

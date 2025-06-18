@@ -293,9 +293,11 @@ BEGIN
         C.CourseName ASC;      
 
 END;
+--Library
+IF OBJECT_ID('Library.RecommendBooksToStudent', 'P') IS NOT NULL
+    DROP PROCEDURE Library.RecommendBooksToStudent;
 GO
-
-CREATE PROCEDURE RecommendBooksToStudent
+CREATE PROCEDURE Library.RecommendBooksToStudent
     @StudentID INT
 AS
 BEGIN
@@ -341,3 +343,109 @@ BEGIN
     GROUP BY B.BookID, B.Title
     ORDER BY Frequency DESC;
 END
+
+IF OBJECT_ID('Library.BorrowBook', 'P') IS NOT NULL
+    DROP PROCEDURE Library.BorrowBook;
+GO
+
+CREATE PROCEDURE [Library].[BorrowBook]
+    @MemberID INT,
+    @CopyID INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRANSACTION;
+    BEGIN TRY
+       
+        DECLARE @ActiveMemberStatusID INT, @AvailableCopyStatusID INT;
+
+        SELECT @ActiveMemberStatusID = AccountStatusID 
+        FROM Library.MemberAccountStatuses 
+        WHERE StatusName = 'Active';
+
+        SELECT @AvailableCopyStatusID = CopyStatusID 
+        FROM Library.BookCopyStatuses 
+        WHERE StatusName = 'Available';
+        
+ 
+        IF @ActiveMemberStatusID IS NULL OR @AvailableCopyStatusID IS NULL
+        BEGIN
+            RAISERROR('System configuration is incomplete. The required "Active" or "Available" statuses were not found.', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END
+
+        -- --- Step 2: Validate the member and the book copy ---
+        DECLARE @CurrentMemberStatusID INT, @CurrentCopyStatusID INT;
+
+        -- Check the member's current status
+        SELECT @CurrentMemberStatusID = AccountStatusID 
+        FROM Library.LibraryMembers 
+        WHERE MemberID = @MemberID;
+
+        IF @CurrentMemberStatusID IS NULL
+        BEGIN
+            RAISERROR('The specified MemberID does not exist.', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END
+
+        IF @CurrentMemberStatusID <> @ActiveMemberStatusID
+        BEGIN
+            RAISERROR('The member''s account is not "Active". Borrowing is not permitted.', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END
+
+        -- Check the book copy's current status
+        SELECT @CurrentCopyStatusID = CopyStatusID 
+        FROM Library.BookCopies 
+        WHERE CopyID = @CopyID;
+
+        IF @CurrentCopyStatusID IS NULL
+        BEGIN
+            RAISERROR('The specified CopyID does not exist.', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END
+
+        IF @CurrentCopyStatusID <> @AvailableCopyStatusID
+        BEGIN
+            RAISERROR('This book copy is not "Available" for loan. It may be already borrowed or under maintenance.', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END
+
+        -- --- Step 3: Insert the new loan record ---
+        -- Set the due date for 14 days from today.
+        DECLARE @DueDate DATETIME = DATEADD(day, 14, GETDATE());
+
+        INSERT INTO [Library].[Loans] (CopyID, MemberID, LoanDate, DueDate)
+        VALUES (@CopyID, @MemberID, GETDATE(), @DueDate);
+        
+        -- Get the ID of the newly created loan record for logging purposes.
+        DECLARE @NewLoanID BIGINT = SCOPE_IDENTITY();
+
+        -- --- Step 4: Log the event in the LibraryLog table ---
+        INSERT INTO [Library].[LibraryLog] (EventType, Description, AffectedTable, AffectedRecordID, UserID)
+        VALUES (
+            N'Book Borrowed',
+            N'Book copy with ID ' + CAST(@CopyID AS VARCHAR(10)) + N' was borrowed by member with ID ' + CAST(@MemberID AS VARCHAR(10)) + N'.',
+            N'Library.Loans',
+            CAST(@NewLoanID AS VARCHAR(255)),
+            NULL -- UserID is set to NULL as it's not being tracked here.
+        );
+        
+        
+        COMMIT TRANSACTION;
+        PRINT 'Book borrowed successfully.';
+
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+        
+        THROW;
+    END CATCH
+END
+GO
