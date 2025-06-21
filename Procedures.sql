@@ -293,9 +293,13 @@ BEGIN
         C.CourseName ASC;      
 
 END;
-GO
 
-CREATE PROCEDURE RecommendBooksToStudent
+-------------------------------------------------------------------------------------------------------------------
+--Library
+IF OBJECT_ID('Library.RecommendBooksToStudent', 'P') IS NOT NULL
+    DROP PROCEDURE Library.RecommendBooksToStudent;
+GO
+CREATE PROCEDURE Library.RecommendBooksToStudent
     @StudentID INT
 AS
 BEGIN
@@ -341,3 +345,282 @@ BEGIN
     GROUP BY B.BookID, B.Title
     ORDER BY Frequency DESC;
 END
+
+IF OBJECT_ID('Library.BorrowBook', 'P') IS NOT NULL
+    DROP PROCEDURE Library.BorrowBook;
+GO
+
+CREATE PROCEDURE [Library].[BorrowBook]
+    @MemberID INT,
+    @CopyID INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRANSACTION;
+    BEGIN TRY
+       
+        DECLARE @ActiveMemberStatusID INT, @AvailableCopyStatusID INT;
+
+        SELECT @ActiveMemberStatusID = AccountStatusID 
+        FROM Library.MemberAccountStatuses 
+        WHERE StatusName = 'Active';
+
+        SELECT @AvailableCopyStatusID = CopyStatusID 
+        FROM Library.BookCopyStatuses 
+        WHERE StatusName = 'Available';
+        
+ 
+        IF @ActiveMemberStatusID IS NULL OR @AvailableCopyStatusID IS NULL
+        BEGIN
+            RAISERROR('System configuration is incomplete. The required "Active" or "Available" statuses were not found.', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END
+
+        -- --- Step 2: Validate the member and the book copy ---
+        DECLARE @CurrentMemberStatusID INT, @CurrentCopyStatusID INT;
+
+        -- Check the member's current status
+        SELECT @CurrentMemberStatusID = AccountStatusID 
+        FROM Library.LibraryMembers 
+        WHERE MemberID = @MemberID;
+
+        IF @CurrentMemberStatusID IS NULL
+        BEGIN
+            RAISERROR('The specified MemberID does not exist.', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END
+
+        IF @CurrentMemberStatusID <> @ActiveMemberStatusID
+        BEGIN
+            RAISERROR('The member''s account is not "Active". Borrowing is not permitted.', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END
+
+        -- Check the book copy's current status
+        SELECT @CurrentCopyStatusID = CopyStatusID 
+        FROM Library.BookCopies 
+        WHERE CopyID = @CopyID;
+
+        IF @CurrentCopyStatusID IS NULL
+        BEGIN
+            RAISERROR('The specified CopyID does not exist.', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END
+
+        IF @CurrentCopyStatusID <> @AvailableCopyStatusID
+        BEGIN
+            RAISERROR('This book copy is not "Available" for loan. It may be already borrowed or under maintenance.', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END
+
+        -- --- Step 3: Insert the new loan record ---
+        -- Set the due date for 14 days from today.
+        DECLARE @DueDate DATETIME = DATEADD(day, 14, GETDATE());
+
+        INSERT INTO [Library].[Loans] (CopyID, MemberID, LoanDate, DueDate)
+        VALUES (@CopyID, @MemberID, GETDATE(), @DueDate);
+        
+        -- Get the ID of the newly created loan record for logging purposes.
+        DECLARE @NewLoanID BIGINT = SCOPE_IDENTITY();
+
+        -- --- Step 4: Log the event in the LibraryLog table ---
+        INSERT INTO [Library].[LibraryLog] (EventType, Description, AffectedTable, AffectedRecordID, UserID)
+        VALUES (
+            'Book Borrowed',
+            'Book copy with ID ' + CAST(@CopyID AS VARCHAR(10)) + N' was borrowed by member with ID ' + CAST(@MemberID AS VARCHAR(10)) + N'.',
+            'Library.Loans',
+            CAST(@NewLoanID AS VARCHAR(255)),
+            NULL -- UserID is set to NULL as it's not being tracked here.
+        );
+        
+        
+        COMMIT TRANSACTION;
+        PRINT 'Book borrowed successfully.';
+
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+        
+        THROW;
+    END CATCH
+END
+
+IF OBJECT_ID('Library.ReturnBook', 'P') IS NOT NULL
+    DROP PROCEDURE Library.ReturnBook;
+GO
+
+CREATE PROCEDURE [Library].[ReturnBook]
+    @CopyID INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Start a transaction to ensure atomicity.
+    BEGIN TRANSACTION;
+
+    BEGIN TRY
+        -- --- Step 1: Declare variables and constants ---
+        DECLARE @LoanID BIGINT;
+        DECLARE @DueDate DATETIME;
+        DECLARE @FineAmount DECIMAL(10, 2) = 0.00;
+        DECLARE @FinePerDay DECIMAL(10, 2) = 0.25; -- Set a daily fine rate. This can be configured.
+        
+        -- --- Step 2: Find the active loan for the specified book copy ---
+        -- An active loan is one that has not yet been returned (ReturnDate IS NULL).
+        SELECT 
+            @LoanID = LoanID,
+            @DueDate = DueDate
+        FROM 
+            [Library].[Loans]
+        WHERE 
+            CopyID = @CopyID 
+            AND ReturnDate IS NULL;
+
+        -- If no active loan is found, the book cannot be returned.
+        IF @LoanID IS NULL
+        BEGIN
+            RAISERROR('This book copy is not currently recorded as being on loan.', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END
+
+        -- --- Step 3: Calculate fines if the book is overdue ---
+        -- A fine is applied if the current date is after the due date.
+        IF GETDATE() > @DueDate
+        BEGIN
+            SET @FineAmount = CAST(DATEDIFF(day, @DueDate, GETDATE()) AS DECIMAL(10, 2)) * @FinePerDay;
+        END
+
+        -- --- Step 4: Update the loan record with the return date and any fines ---
+        -- This UPDATE is the action that will fire the trigger.
+        UPDATE [Library].[Loans]
+        SET 
+            ReturnDate = GETDATE(),
+            FinesApplied = @FineAmount
+        WHERE 
+            LoanID = @LoanID;
+
+        -- --- Step 5: Log the return event ---
+        INSERT INTO [Library].[LibraryLog] (EventType, Description, AffectedTable, AffectedRecordID, UserID)
+        VALUES (
+            'Book Returned',
+            'Book copy with ID ' + CAST(@CopyID AS VARCHAR(10)) + ' was returned. LoanID: ' + CAST(@LoanID AS VARCHAR(20)) + N'. Fine applied: $' + CAST(@FineAmount AS VARCHAR(20)),
+            'Library.Loans',
+            CAST(@LoanID AS VARCHAR(255)),
+            NULL -- UserID is not tracked in this version.
+        );
+
+        -- If all steps succeed, commit the transaction.
+        COMMIT TRANSACTION;
+        PRINT 'Book returned successfully. Fine of $' + CAST(@FineAmount AS VARCHAR(20)) + ' was applied.';
+
+    END TRY
+    BEGIN CATCH
+        -- If an error occurs, roll back all changes.
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+        
+        -- Propagate the error.
+        THROW;
+    END CATCH
+END
+GO
+
+IF OBJECT_ID('Library.AddBookWithCopies', 'P') IS NOT NULL
+    DROP PROCEDURE Library.AddBookWithCopies;
+GO
+
+CREATE PROCEDURE [Library].[AddBookWithCopies]
+    -- Parameters for the new book
+    @ISBN VARCHAR(20),
+    @Title NVARCHAR(255),
+    @PublisherID INT,
+    @PublicationYear INT = NULL,
+    @Edition NVARCHAR(50) = NULL,
+    @Description NTEXT = NULL,
+    
+    -- Parameters for the copies
+    @NumberOfCopies INT,
+    @AcquisitionDate DATE = NULL,
+    @PurchasePrice DECIMAL(10, 2) = NULL,
+    @LocationInLibrary NVARCHAR(100) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    BEGIN TRANSACTION;
+
+    BEGIN TRY
+        -- --- Step 1: Validate input ---
+        -- Ensure the ISBN doesn't already exist to prevent duplicates.
+        IF EXISTS (SELECT 1 FROM [Library].[Books] WHERE ISBN = @ISBN)
+        BEGIN
+            RAISERROR('A book with this ISBN already exists.', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END
+
+        -- Default the acquisition date to today if not provided.
+        IF @AcquisitionDate IS NULL
+        BEGIN
+            SET @AcquisitionDate = GETDATE();
+        END
+        
+        -- --- Step 2: Insert the main book record ---
+        INSERT INTO [Library].[Books] (ISBN, Title, PublicationYear, PublisherID, Edition, Description)
+        VALUES (@ISBN, @Title, @PublicationYear, @PublisherID, @Edition, @Description);
+
+        -- Get the ID of the newly created book.
+        DECLARE @NewBookID INT = SCOPE_IDENTITY();
+
+        -- --- Step 3: Add the physical copies in a loop ---
+        DECLARE @AvailableStatusID INT;
+        SELECT @AvailableStatusID = CopyStatusID FROM [Library].[BookCopyStatuses] WHERE StatusName = 'Available';
+
+        IF @AvailableStatusID IS NULL
+        BEGIN
+            RAISERROR('The "Available" status is not defined in BookCopyStatuses. Cannot add copies.', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END
+
+        DECLARE @Counter INT = 0;
+        WHILE @Counter < @NumberOfCopies
+        BEGIN
+            INSERT INTO [Library].[BookCopies] (BookID, AcquisitionDate, CopyStatusID, LocationInLibrary, PurchasePrice)
+            VALUES (@NewBookID, @AcquisitionDate, @AvailableStatusID, @LocationInLibrary, @PurchasePrice);
+            
+            SET @Counter = @Counter + 1;
+        END
+
+        -- --- Step 4: Log the event ---
+        INSERT INTO [Library].[LibraryLog] (EventType, Description, AffectedTable, AffectedRecordID, UserID)
+        VALUES (
+            'New Book and Copies Added',
+            'Added new book "' + @Title + '" (ID: ' + CAST(@NewBookID AS VARCHAR(10)) + ') with ' + CAST(@NumberOfCopies AS VARCHAR(5)) + ' copies.',
+            'Library.Books',
+            CAST(@NewBookID AS VARCHAR(255)),
+            NULL
+        );
+
+        -- If all operations succeed, commit the transaction.
+        COMMIT TRANSACTION;
+        PRINT 'Successfully added book and ' + CAST(@NumberOfCopies AS VARCHAR(5)) + ' copies.';
+
+    END TRY
+    BEGIN CATCH
+        -- If any error occurs, roll back the entire transaction.
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+
+        -- Rethrow the error for the calling application.
+        THROW;
+    END CATCH
+END
+GO

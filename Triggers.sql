@@ -105,8 +105,14 @@ BEGIN
     CLOSE student_cursor;
     DEALLOCATE student_cursor;
 END;
+-------------------------------------------------------------------------------------------------------------
+--Library
 GO
-CREATE TRIGGER trg_UpdateLibraryAccountAndLog
+IF OBJECT_ID('Education.Trg_UpdateLibraryAccountAndLog', 'TR') IS NOT NULL
+    DROP TRIGGER Education.Trg_UpdateLibraryAccountAndLog;
+GO
+
+CREATE TRIGGER Education.Trg_UpdateLibraryAccountAndLog
 ON Education.Students
 AFTER UPDATE
 AS
@@ -156,3 +162,166 @@ BEGIN
     JOIN Education.StudentStatuses iss ON i.StudentStatusID = iss.StudentStatusID
     WHERE i.StudentStatusID <> d.StudentStatusID;
 END
+
+-- Updates the book copy status to "Borrowed" after a new loan is inserted.
+IF OBJECT_ID('Library.TR_Loans_AfterInsert_UpdateBookCopyStatusToBorrowed', 'TR') IS NOT NULL
+    DROP TRIGGER Library.TR_Loans_AfterInsert_UpdateBookCopyStatusToBorrowed;
+GO
+
+CREATE TRIGGER [Library].[TR_Loans_AfterInsert_UpdateBookCopyStatusToBorrowed]
+ON [Library].[Loans]
+AFTER INSERT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @BorrowedStatusID INT;
+    SELECT @BorrowedStatusID = CopyStatusID 
+    FROM Library.BookCopyStatuses 
+    WHERE StatusName = 'Borrowed';
+    IF @BorrowedStatusID IS NOT NULL
+    BEGIN
+        UPDATE bc
+        SET bc.CopyStatusID = @BorrowedStatusID
+        FROM [Library].[BookCopies] AS bc
+        INNER JOIN inserted AS i ON bc.CopyID = i.CopyID;
+    END
+END
+
+-- Updates the book copy status to "Available" when a book is returned.
+IF OBJECT_ID('Library.TR_Loans_AfterUpdate_HandleReturnAndUpdateBookCopyStatus', 'TR') IS NOT NULL
+    DROP TRIGGER Library.TR_Loans_AfterUpdate_HandleReturnAndUpdateBookCopyStatus;
+GO
+
+CREATE TRIGGER [Library].[TR_Loans_AfterUpdate_HandleReturnAndUpdateBookCopyStatus]
+ON [Library].[Loans]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- This check ensures the trigger only runs when the ReturnDate column is part of the UPDATE statement.
+    IF UPDATE(ReturnDate)
+    BEGIN
+        -- Find the ID for the "Available" status.
+        DECLARE @AvailableStatusID INT;
+        SELECT @AvailableStatusID = CopyStatusID 
+        FROM Library.BookCopyStatuses 
+        WHERE StatusName = 'Available';
+
+        -- Update only those copies where the book was just returned (i.e., the old ReturnDate was NULL and the new one is not).
+        IF @AvailableStatusID IS NOT NULL
+        BEGIN
+            UPDATE bc
+            SET bc.CopyStatusID = @AvailableStatusID
+            FROM [Library].[BookCopies] AS bc
+            INNER JOIN inserted AS i ON bc.CopyID = i.CopyID
+            INNER JOIN deleted AS d ON i.LoanID = d.LoanID
+            WHERE i.ReturnDate IS NOT NULL AND d.ReturnDate IS NULL;
+        END
+    END
+END
+GO
+
+IF OBJECT_ID('Library.TR_LibraryMembers_LogChanges', 'TR') IS NOT NULL
+    DROP TRIGGER Library.TR_LibraryMembers_LogChanges;
+GO
+
+CREATE TRIGGER [Library].[TR_LibraryMembers_LogChanges]
+ON [Library].[LibraryMembers]
+AFTER INSERT, UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    -- Check if it was an INSERT operation
+    IF EXISTS (SELECT * FROM inserted) AND NOT EXISTS (SELECT * FROM deleted)
+    BEGIN
+        INSERT INTO [Library].[LibraryLog] (EventType, Description, AffectedTable, AffectedRecordID, UserID)
+        SELECT
+            'New Member Added',
+            'New library member created with ID: ' + CAST(i.MemberID AS VARCHAR(10)) + ' for StudentID: ' + CAST(i.StudentID AS VARCHAR(10)),
+            'Library.LibraryMembers',
+            CAST(i.MemberID AS VARCHAR(255)),
+            NULL
+        FROM
+            inserted i;
+    END
+
+    -- Check if it was an UPDATE operation
+    IF EXISTS (SELECT * FROM inserted) AND EXISTS (SELECT * FROM deleted)
+    BEGIN
+        -- Log changes only when the AccountStatusID has been modified.
+        INSERT INTO [Library].[LibraryLog] (EventType, Description, AffectedTable, AffectedRecordID, UserID)
+        SELECT
+            'Member Status Updated',
+            'Account status for member ID: ' + CAST(i.MemberID AS VARCHAR(10)) + ' changed from "' + os.StatusName + '" to "' + ns.StatusName + '".',
+            'Library.LibraryMembers',
+            CAST(i.MemberID AS VARCHAR(255)),
+            NULL
+        FROM
+            inserted i
+        INNER JOIN
+            deleted d ON i.MemberID = d.MemberID
+        INNER JOIN
+            [Library].[MemberAccountStatuses] ns ON i.AccountStatusID = ns.AccountStatusID
+        INNER JOIN
+            [Library].[MemberAccountStatuses] os ON d.AccountStatusID = os.AccountStatusID
+        WHERE
+            i.AccountStatusID <> d.AccountStatusID; -- Only log if the status actually changed.
+    END
+END
+GO
+IF OBJECT_ID('Library.TR_Books_LogChanges', 'TR') IS NOT NULL
+    DROP TRIGGER Library.TR_Books_LogChanges;
+GO
+
+CREATE TRIGGER [Library].[TR_Books_LogChanges]
+ON [Library].[Books]
+AFTER INSERT, UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Handle INSERT operations
+    IF EXISTS (SELECT * FROM inserted) AND NOT EXISTS (SELECT * FROM deleted)
+    BEGIN
+        INSERT INTO [Library].[LibraryLog] (EventType, Description, AffectedTable, AffectedRecordID, UserID)
+        SELECT
+            'New Book Added',
+            'New book added: "' + i.Title + '" (ISBN: ' + i.ISBN + ').',
+            'Library.Books',
+            CAST(i.BookID AS VARCHAR(255)),
+            NULL
+        FROM
+            inserted i;
+    END
+
+    -- Handle UPDATE operations
+    IF EXISTS (SELECT * FROM inserted) AND EXISTS (SELECT * FROM deleted)
+    BEGIN
+        INSERT INTO [Library].[LibraryLog] (EventType, Description, AffectedTable, AffectedRecordID, UserID)
+        SELECT
+            'Book Information Updated',
+            'Information for book "' + i.Title + '" (ID: ' + CAST(i.BookID AS VARCHAR(10)) + ') was updated.',
+            'Library.Books',
+            CAST(i.BookID AS VARCHAR(255)),
+            NULL
+        FROM
+            inserted i;
+    END
+
+    -- Handle DELETE operations
+    IF EXISTS (SELECT * FROM deleted) AND NOT EXISTS (SELECT * FROM inserted)
+    BEGIN
+        INSERT INTO [Library].[LibraryLog] (EventType, Description, AffectedTable, AffectedRecordID, UserID)
+        SELECT
+            'Book Deleted',
+            'Book deleted: "' + d.Title + '" (ID: ' + CAST(d.BookID AS VARCHAR(10)) + ', ISBN: ' + d.ISBN + ').',
+            'Library.Books',
+            CAST(d.BookID AS VARCHAR(255)),
+            NULL
+        FROM
+            deleted d;
+    END
+END
+GO
