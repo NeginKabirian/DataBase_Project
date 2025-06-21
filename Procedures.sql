@@ -162,7 +162,7 @@ GO
 
 CREATE PROCEDURE Education.UpdateStudentStatus
     @StudentID INT,
-    @NewStatusName NVARCHAR(50), -- Input is now the name of the status, e.g., 'Graduated', 'Withdrawn'
+    @NewStatusName NVARCHAR(50),
     @ProcessedByUserID NVARCHAR(128) = NULL
 AS
 BEGIN
