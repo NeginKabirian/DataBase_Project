@@ -1,0 +1,4 @@
+USE Database_project
+Go
+EXEC Library.DisplayAllStudentRecommendations
+Go

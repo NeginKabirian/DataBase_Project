@@ -769,3 +769,37 @@ BEGIN
     END CATCH
 END
 GO
+
+CREATE PROCEDURE Library.DisplayAllStudentRecommendations
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- A cursor to iterate through each student who is a library member.
+    DECLARE @CurrentStudentID INT;
+
+    -- Get a distinct list of all students who are members.
+    -- I am assuming StudentID is available in Library.LibraryMembers.
+    -- Adjust if your table structure is different.
+    DECLARE student_cursor CURSOR FOR
+    SELECT DISTINCT StudentID FROM Library.LibraryMembers;
+
+    OPEN student_cursor;
+
+    FETCH NEXT FROM student_cursor INTO @CurrentStudentID;
+
+    -- Loop through each student.
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Execute your original stored procedure for the current student.
+        -- The results of each execution will be sent to the output stream.
+        EXEC Library.RecommendBooksToStudent @StudentID = @CurrentStudentID;
+
+        FETCH NEXT FROM student_cursor INTO @CurrentStudentID;
+    END
+
+    -- Clean up the cursor.
+    CLOSE student_cursor;
+    DEALLOCATE student_cursor;
+END
+GO
