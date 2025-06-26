@@ -572,7 +572,7 @@ BEGIN
         
         -- Get the ID of the newly created loan record for logging purposes.
         DECLARE @NewLoanID BIGINT = SCOPE_IDENTITY();
-
+		DECLARE @UserID NVARCHAR(128) = SUSER_SNAME();
         -- --- Step 4: Log the event in the LibraryLog table ---
         INSERT INTO [Library].[LibraryLog] (EventType, Description, AffectedTable, AffectedRecordID, UserID)
         VALUES (
@@ -580,7 +580,7 @@ BEGIN
             'Book copy with ID ' + CAST(@CopyID AS VARCHAR(10)) + N' was borrowed by member with ID ' + CAST(@MemberID AS VARCHAR(10)) + N'.',
             'Library.Loans',
             CAST(@NewLoanID AS VARCHAR(255)),
-            NULL -- UserID is set to NULL as it's not being tracked here.
+            @UserID
         );
         
         
@@ -650,7 +650,7 @@ BEGIN
             FinesApplied = @FineAmount
         WHERE 
             LoanID = @LoanID;
-
+		DECLARE @UserID NVARCHAR(128) = SUSER_SNAME();
         -- --- Step 5: Log the return event ---
         INSERT INTO [Library].[LibraryLog] (EventType, Description, AffectedTable, AffectedRecordID, UserID)
         VALUES (
@@ -658,7 +658,7 @@ BEGIN
             'Book copy with ID ' + CAST(@CopyID AS VARCHAR(10)) + ' was returned. LoanID: ' + CAST(@LoanID AS VARCHAR(20)) + N'. Fine applied: $' + CAST(@FineAmount AS VARCHAR(20)),
             'Library.Loans',
             CAST(@LoanID AS VARCHAR(255)),
-            NULL -- UserID is not tracked in this version.
+            @UserID
         );
 
         -- If all steps succeed, commit the transaction.
