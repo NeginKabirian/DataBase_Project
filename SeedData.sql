@@ -421,6 +421,7 @@ BEGIN TRY
     -- Term 2
     (@Math2_ID, @Math1_ID), (@Physics2_ID, @Physics1_ID), (@AdvProg_ID, @ProgFund_ID),
     (@DiffEq_ID, @Math1_ID), (@DiffEq_ID, @Math2_ID), (@PhysicsLab_ID, @Physics2_ID),
+	(@Discrete_ID,@ProgFund_ID),
     -- Term 3
     (@Stats_ID, @Math2_ID), (@EngMath_ID, @Math2_ID), (@Circuits_ID, @Physics2_ID),
     (@Circuits_ID, @DiffEq_ID), (@DataStruct_ID, @AdvProg_ID), (@DataStruct_ID, @Discrete_ID),
@@ -600,7 +601,10 @@ BEGIN TRY
     -- Term 2 courses offered in Spring 2024
     INSERT INTO Education.OfferedCourses (CourseID, ProfessorID, SemesterID, Capacity, RoomID, ScheduleInfo) VALUES
     (@AdvProg_ID, @ProfNaderID, @Spring2024_ID, 40, @RoomE102_ID, 'Sun/Tue 14:00-16:00'),
-    (@Discrete_ID, @ProfShirinID, @Spring2024_ID, 40, @RoomE101_ID, 'Mon/Wed 14:00-16:00');
+    (@Discrete_ID, @ProfShirinID, @Spring2024_ID, 40, @RoomE101_ID, 'Mon/Wed 14:00-16:00'),
+	(@Math1_ID, @ProfSajadID, @Spring2024_ID, 60, @RoomS300_ID, 'Sun/Tue 12:00-14:00'), -- Math 1 offered again
+    (@Physics1_ID, @ProfSajadID, @Spring2024_ID, 60, @RoomS300_ID, 'Mon/Wed 12:00-14:00'), -- Physics 1 offered again
+    (@ProgFund_ID, @ProfNaderID, @Spring2024_ID, 30, @RoomE101_ID, 'Sat/Mon 12:00-14:00'); 
 
     -- Higher level courses offered in Fall 2024 (for future enrollment/suggestion tests)
     INSERT INTO Education.OfferedCourses (CourseID, ProfessorID, SemesterID, Capacity, RoomID, ScheduleInfo) VALUES
@@ -616,5 +620,3 @@ BEGIN CATCH
     RETURN;
 END CATCH
 GO
-
-select * from Education.OfferedCourses;
