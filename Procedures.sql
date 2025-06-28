@@ -771,3 +771,84 @@ BEGIN
     END CATCH
 END
 GO
+
+
+IF OBJECT_ID('Library.GenerateAllStudentBookRecommendations', 'P') IS NOT NULL
+    DROP PROCEDURE Library.GenerateAllStudentBookRecommendations;
+GO
+
+CREATE PROCEDURE Library.GenerateAllStudentBookRecommendations
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @StartTime DATETIME = GETDATE();
+    PRINT 'Starting book recommendation generation for all students at ' + CONVERT(VARCHAR, @StartTime, 120);
+
+    -- Step 1: Clear out old recommendations to make way for the new ones.
+    -- TRUNCATE TABLE is fast but cannot be used if the table is referenced by a FK.
+    -- DELETE is safer.
+    DELETE FROM Library.BookRecommendations;
+    PRINT 'Old recommendations cleared.';
+
+    -- Step 2: Create a temporary table to capture the output of the existing procedure.
+    -- The schema must match the output of RecommendBooksToStudent.
+    CREATE TABLE #TempRecommendations (
+        BookID INT,
+        Title NVARCHAR(255),
+        Frequency INT
+    );
+
+    -- Step 3: Loop through all active students using a cursor.
+    DECLARE @CurrentStudentID INT;
+    DECLARE student_cursor CURSOR FOR
+        SELECT s.StudentID
+        FROM Education.Students s
+        JOIN Education.StudentStatuses ss ON s.StudentStatusID = ss.StudentStatusID
+        WHERE ss.StatusName = 'Active'; -- Only generate for active students
+
+    OPEN student_cursor;
+    FETCH NEXT FROM student_cursor INTO @CurrentStudentID;
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Clear the temp table for each student to avoid carrying over results
+        TRUNCATE TABLE #TempRecommendations;
+
+        -- Execute your friend's procedure and insert its results into our temp table
+        BEGIN TRY
+            INSERT INTO #TempRecommendations (BookID, Title, Frequency)
+            EXEC Library.RecommendBooksToStudent @StudentID = @CurrentStudentID;
+        END TRY
+        BEGIN CATCH
+            -- If the procedure fails for one student, log it and continue with the next
+            PRINT 'Error generating recommendations for StudentID ' + CAST(@CurrentStudentID AS VARCHAR) + ': ' + ERROR_MESSAGE();
+        END CATCH
+
+        -- Now, insert the captured recommendations from the temp table into the permanent table
+        IF EXISTS (SELECT 1 FROM #TempRecommendations)
+        BEGIN
+            INSERT INTO Library.BookRecommendations (StudentID, BookID, RecommendationScore, GeneratedDate)
+            SELECT
+                @CurrentStudentID,
+                BookID,
+                Frequency, -- Using frequency as the score
+                GETDATE()
+            FROM #TempRecommendations;
+
+            PRINT '  -> Generated ' + CAST(@@ROWCOUNT AS VARCHAR) + ' recommendations for StudentID: ' + CAST(@CurrentStudentID AS VARCHAR);
+        END
+
+        FETCH NEXT FROM student_cursor INTO @CurrentStudentID;
+    END
+
+    CLOSE student_cursor;
+    DEALLOCATE student_cursor;
+
+    -- Drop the temporary table
+    DROP TABLE #TempRecommendations;
+    
+    DECLARE @EndTime DATETIME = GETDATE();
+    PRINT 'Book recommendation generation process finished at ' + CONVERT(VARCHAR, @EndTime, 120);
+    PRINT 'Total duration: ' + CAST(DATEDIFF(SECOND, @StartTime, @EndTime) AS VARCHAR) + ' seconds.';
+END;
+GO

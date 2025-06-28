@@ -288,6 +288,19 @@ CREATE TABLE [Library].[LibraryLog] (
 )
 GO
 
+IF OBJECT_ID('Library.BookRecommendations', 'U') IS NULL
+CREATE TABLE Library.BookRecommendations (
+   RecommendationID BIGINT PRIMARY KEY IDENTITY(1,1),
+   StudentID INT NOT NULL,
+   BookID INT NOT NULL,
+   RecommendationScore DECIMAL(5,2) NOT NULL, -- To store the frequency or a calculated score
+   GeneratedDate DATETIME2 NOT NULL DEFAULT GETDATE(),
+   CONSTRAINT FK_BookRecs_Student FOREIGN KEY (StudentID) REFERENCES Education.Students(StudentID) ON DELETE CASCADE,
+   CONSTRAINT FK_BookRecs_Book FOREIGN KEY (BookID) REFERENCES Library.Books(BookID) ON DELETE CASCADE,
+   CONSTRAINT UQ_Student_Book_Rec UNIQUE (StudentID, BookID) -- A student gets a specific book recommended only once per generation
+ )
+ GO
+
 
 IF NOT EXISTS (SELECT * FROM sys.foreign_keys WHERE object_id = OBJECT_ID(N'FK_Students_Major') AND parent_object_id = OBJECT_ID(N'Education.Students'))
 ALTER TABLE [Education].[Students] ADD CONSTRAINT FK_Students_Major FOREIGN KEY ([MajorID]) REFERENCES [Education].[Majors] ([MajorID]) ON DELETE CASCADE ON UPDATE CASCADE;
