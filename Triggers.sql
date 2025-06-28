@@ -210,7 +210,7 @@ GO
 IF OBJECT_ID('Education.Trg_UpdateLibraryAccountAndLog', 'TR') IS NOT NULL
     DROP TRIGGER Education.Trg_UpdateLibraryAccountAndLog;
 GO
-
+--****
 CREATE TRIGGER Education.Trg_UpdateLibraryAccountAndLog
 ON Education.Students
 AFTER UPDATE
@@ -426,15 +426,17 @@ BEGIN
     SET NOCOUNT ON;
     
     -- Check if it was an INSERT operation
+
     IF EXISTS (SELECT * FROM inserted) AND NOT EXISTS (SELECT * FROM deleted)
     BEGIN
+		DECLARE @UserID NVARCHAR(128) = SUSER_SNAME();
         INSERT INTO [Library].[LibraryLog] (EventType, Description, AffectedTable, AffectedRecordID, UserID)
         SELECT
             'New Member Added',
             'New library member created with ID: ' + CAST(i.MemberID AS VARCHAR(10)) + ' for StudentID: ' + CAST(i.StudentID AS VARCHAR(10)),
             'Library.LibraryMembers',
             CAST(i.MemberID AS VARCHAR(255)),
-            NULL
+            @UserID
         FROM
             inserted i;
     END
@@ -442,6 +444,7 @@ BEGIN
     -- Check if it was an UPDATE operation
     IF EXISTS (SELECT * FROM inserted) AND EXISTS (SELECT * FROM deleted)
     BEGIN
+		DECLARE @UserID NVARCHAR(128) = SUSER_SNAME();
         -- Log changes only when the AccountStatusID has been modified.
         INSERT INTO [Library].[LibraryLog] (EventType, Description, AffectedTable, AffectedRecordID, UserID)
         SELECT
@@ -449,7 +452,7 @@ BEGIN
             'Account status for member ID: ' + CAST(i.MemberID AS VARCHAR(10)) + ' changed from "' + os.StatusName + '" to "' + ns.StatusName + '".',
             'Library.LibraryMembers',
             CAST(i.MemberID AS VARCHAR(255)),
-            NULL
+            @UserID
         FROM
             inserted i
         INNER JOIN
@@ -477,13 +480,14 @@ BEGIN
     -- Handle INSERT operations
     IF EXISTS (SELECT * FROM inserted) AND NOT EXISTS (SELECT * FROM deleted)
     BEGIN
+		DECLARE @UserID NVARCHAR(128) = SUSER_SNAME();
         INSERT INTO [Library].[LibraryLog] (EventType, Description, AffectedTable, AffectedRecordID, UserID)
         SELECT
             'New Book Added',
             'New book added: "' + i.Title + '" (ISBN: ' + i.ISBN + ').',
             'Library.Books',
             CAST(i.BookID AS VARCHAR(255)),
-            NULL
+             @UserID
         FROM
             inserted i;
     END
@@ -491,13 +495,14 @@ BEGIN
     -- Handle UPDATE operations
     IF EXISTS (SELECT * FROM inserted) AND EXISTS (SELECT * FROM deleted)
     BEGIN
+		DECLARE @UserID NVARCHAR(128) = SUSER_SNAME();
         INSERT INTO [Library].[LibraryLog] (EventType, Description, AffectedTable, AffectedRecordID, UserID)
         SELECT
             'Book Information Updated',
             'Information for book "' + i.Title + '" (ID: ' + CAST(i.BookID AS VARCHAR(10)) + ') was updated.',
             'Library.Books',
             CAST(i.BookID AS VARCHAR(255)),
-            NULL
+            @UserID
         FROM
             inserted i;
     END
@@ -505,13 +510,14 @@ BEGIN
     -- Handle DELETE operations
     IF EXISTS (SELECT * FROM deleted) AND NOT EXISTS (SELECT * FROM inserted)
     BEGIN
+		DECLARE @UserID NVARCHAR(128) = SUSER_SNAME();
         INSERT INTO [Library].[LibraryLog] (EventType, Description, AffectedTable, AffectedRecordID, UserID)
         SELECT
             'Book Deleted',
             'Book deleted: "' + d.Title + '" (ID: ' + CAST(d.BookID AS VARCHAR(10)) + ', ISBN: ' + d.ISBN + ').',
             'Library.Books',
             CAST(d.BookID AS VARCHAR(255)),
-            NULL
+            @UserID
         FROM
             deleted d;
     END

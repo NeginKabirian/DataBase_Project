@@ -743,7 +743,7 @@ BEGIN
             
             SET @Counter = @Counter + 1;
         END
-
+		DECLARE @UserID NVARCHAR(128) = SUSER_SNAME();
         -- --- Step 4: Log the event ---
         INSERT INTO [Library].[LibraryLog] (EventType, Description, AffectedTable, AffectedRecordID, UserID)
         VALUES (
@@ -751,7 +751,7 @@ BEGIN
             'Added new book "' + @Title + '" (ID: ' + CAST(@NewBookID AS VARCHAR(10)) + ') with ' + CAST(@NumberOfCopies AS VARCHAR(5)) + ' copies.',
             'Library.Books',
             CAST(@NewBookID AS VARCHAR(255)),
-            NULL
+            @UserID
         );
 
         -- If all operations succeed, commit the transaction.
