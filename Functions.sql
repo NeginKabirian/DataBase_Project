@@ -272,7 +272,7 @@ BEGIN
     RETURN @TotalCapacity - @EnrolledCount;
 END;
 GO
-
+-------------------------------------------------------------------------------------------------------------------
 --Library Function
 CREATE FUNCTION Library.CountAvailableBookCopies(@BookID INT)
 RETURNS INT
