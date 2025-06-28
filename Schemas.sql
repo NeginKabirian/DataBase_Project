@@ -1,3 +1,6 @@
+USE Database_project;
+GO
+
 IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'Education')
 BEGIN
     EXEC('CREATE SCHEMA Education');

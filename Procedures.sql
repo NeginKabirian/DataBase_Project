@@ -1,3 +1,5 @@
+USE Database_project;
+GO
 
 IF OBJECT_ID('Library.CreateLibraryMemberFromStudent', 'P') IS NOT NULL
     DROP PROCEDURE Library.CreateLibraryMemberFromStudent;

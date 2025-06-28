@@ -1,3 +1,6 @@
+USE Database_project;
+GO
+
 GRANT CONTROL ON SCHEMA :: Education TO EducationAdminRole;
 GRANT SELECT ON SCHEMA :: Library TO EducationAdminRole;
 GRANT EXECUTE ON Education.RegisterStudent TO EducationAdminRole;
@@ -10,7 +13,7 @@ GRANT SELECT ON Education.Majors TO LibrarianRole;
 GRANT SELECT ON Education.StudentStatuses TO LibrarianRole;
 DENY EXECUTE ON Education.RegisterStudent TO LibrarianRole;
 
- 
+GRANT SELECT ON Education.Students TO StudentRole;
 GRANT SELECT ON Education.Courses TO StudentRole;
 GRANT SELECT ON Education.Majors TO StudentRole;
 GRANT SELECT ON Education.Departments TO StudentRole;
@@ -28,4 +31,6 @@ DENY INSERT, UPDATE, DELETE ON SCHEMA :: Library TO StudentRole;
 
 DENY EXECUTE ON Education.RegisterStudent TO StudentRole;
 GRANT EXECUTE ON Education.EnrollStudentInCourse TO StudentRole;
-
+GRANT EXECUTE ON Education.CalculateStudentGPA TO StudentRole;
+GRANT EXECUTE ON Education.GetStudentRemainingCredits TO StudentRole;
+GRANT EXECUTE ON Education.GetStudentCurrentAcademicStatus TO StudentRole;
