@@ -1,3 +1,6 @@
+USE Database_project;
+GO
+
 DECLARE @TestCourseID INT, @TestStudentID_Hosein INT, @TestStudentID_Sara INT, @MajorID INT;
 DECLARE @CS101_OCID INT, @Math1_OCID INT, @Physics1_OCID INT;
 DECLARE @CS101_EnrollID INT, @Math1_EnrollID INT, @Physics1_EnrollID_Sara INT;

@@ -1,3 +1,7 @@
+USE Database_project;
+GO
+
+
 BEGIN TRY
     INSERT INTO Education.Departments (DepartmentName) VALUES
     ('Computer Engineering'),

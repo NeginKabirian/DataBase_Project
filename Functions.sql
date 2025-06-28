@@ -1,4 +1,7 @@
-﻿IF OBJECT_ID('Education.CalculateStudentGPA', 'FN') IS NOT NULL OR 
+﻿USE Database_project;
+GO
+
+IF OBJECT_ID('Education.CalculateStudentGPA', 'FN') IS NOT NULL OR 
 OBJECT_ID('Education.CalculateStudentGPA', 'IF') IS NOT NULL
 BEGIN
 	DROP FUNCTION Education.CalculateStudentGPA;

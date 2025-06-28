@@ -1,4 +1,7 @@
-﻿IF OBJECT_ID('Education.TR_Students_ValidateAndInsert', 'TR') IS NOT NULL
+﻿USE Database_project;
+GO
+
+IF OBJECT_ID('Education.TR_Students_ValidateAndInsert', 'TR') IS NOT NULL
     DROP TRIGGER Education.TR_Students_ValidateAndInsert;
 GO
 

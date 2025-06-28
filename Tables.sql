@@ -1,3 +1,6 @@
+USE Database_project;
+GO
+
 IF OBJECT_ID('Education.Students', 'U') IS NULL
 CREATE TABLE [Education].[Students] (
   [StudentID] int PRIMARY KEY IDENTITY(1, 1),
