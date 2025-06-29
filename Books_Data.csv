@@ -1,0 +1,6 @@
+BookID,ISBN,Title,PublicationYear,PublisherID,Edition,Description,CoverImageURL
+1,9780439023528,The Hunger Games,2008,1,1st,A dystopian novel by Suzanne Collins.,https://example.com/hunger_games.jpg
+2,9780545010221,Harry Potter and the Deathly Hallows,2007,2,1st,The final book in the Harry Potter series.,https://example.com/hp7.jpg
+3,9780143127741,Sapiens: A Brief History of Humankind,2011,3,1st,A book by Yuval Noah Harari on the history of humans.,https://example.com/sapiens.jpg
+4,9780307474278,The Girl with the Dragon Tattoo,2005,4,1st,A mystery novel by Stieg Larsson.,https://example.com/dragon_tattoo.jpg
+5,9780062316097,The Alchemist,1988,5,25th Anniversary,A novel by Paulo Coelho about following your dreams.,https://example.com/alchemist.jpg
