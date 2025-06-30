@@ -288,7 +288,7 @@ BEGIN
     RETURN @AvailableCount;
 END;
 Go
---DROP FUNCTION IF EXISTS Library.HasMemberOverdueBooks;
+
 
 CREATE FUNCTION Library.HasMemberOverdueBooks(@MemberID INT)
 RETURNS BIT
