@@ -1,210 +1,247 @@
---Library.CountAvailableBookCopies
+
+-- # 1. Testing Library.CountAvailableBookCopies Function
 --Tables
+/*select *
+from Library.Books
 select *
 from Library.BookCopies
---Excecute
-SELECT Library.CountAvailableBookCopies(11) AS AvailableCopies;
-SELECT Library.CountAvailableBookCopies(13) AS AvailableCopies;
 
------------------------------------------------
---Library PROCEDURE , Trigger And Function
------------------------------------------------
---Borrow Book PROCEDURE
---Tables Before
+DECLARE @isbn1 NVARCHAR(20) = '978-0132350884'; --Clean Code: A Handbook of Agile Software Craftsmanship
+DECLARE @isbn2 NVARCHAR(20) = '978-0321125217'; --Refactoring: Improving the Design of Existing Code
+
+
+DECLARE @bookId1 INT = (SELECT BookID FROM Library.Books WHERE ISBN = @isbn1);
+DECLARE @bookId2 INT = (SELECT BookID FROM Library.Books WHERE ISBN = @isbn2);
+
+-- Execute 
+PRINT 'Counting available copies for ISBN: ' + @isbn1;
+SELECT Library.CountAvailableBookCopies(@bookId1) AS AvailableCopies;
+
+PRINT 'Counting available copies for ISBN: ' + @isbn2;
+SELECT Library.CountAvailableBookCopies(@bookId2) AS AvailableCopies;
+GO*/
+
+
+
+-- Testing Borrow & Return Procedures and Related Triggers/Functions
+
+-- 2. BORROWING PROCESS --  
+--Execute before and after borrow
+/*
+DECLARE @studentNationalIDForBorrow NVARCHAR(100) = '1234567890'; -- Hossein
+DECLARE @isbnToBorrow NVARCHAR(20) = '978-0132350884';       -- Clean Code
+
+
+DECLARE @memberId INT;
+DECLARE @bookIdToBorrow INT;
+DECLARE @copyIdToBorrow1 INT;
+DECLARE @copyIdToBorrow2 INT;
+
+SELECT @memberId = mem.MemberID
+FROM Library.LibraryMembers AS mem
+JOIN Education.Students AS stu ON mem.StudentID = stu.StudentID
+WHERE stu.NationalID = @studentNationalIDForBorrow;
+SELECT @bookIdToBorrow = BookID FROM Library.Books WHERE ISBN = @isbnToBorrow; --Clean Code
+
+
+SELECT TOP 1 @copyIdToBorrow1 = CopyID FROM Library.BookCopies WHERE BookID = @bookIdToBorrow AND CopyStatusID = (SELECT CopyStatusID FROM Library.BookCopyStatuses WHERE StatusName = 'Available');
+SELECT TOP 1 @copyIdToBorrow2 = CopyID FROM Library.BookCopies WHERE BookID = @bookIdToBorrow AND CopyStatusID = (SELECT CopyStatusID FROM Library.BookCopyStatuses WHERE StatusName = 'Available') AND CopyID <> @copyIdToBorrow1;
+
+
+--Table 
+select *
+from Education.Students
 select *
 from Library.LibraryMembers
-
 select *
 from Library.Loans
-
+select *
+from Library.Books
 select* 
 from Library.BookCopies
 select *
 from Library.BookCopyStatuses
-
 select * 
 from Library.LibraryLog
---Excecute
-SELECT Library.IsBookCopyAvailable(47) As IsBookCopyAvailable; --IsBookCopyAvailable Function
-EXEC Library.BorrowBook @MemberID = 4, @CopyID = 45;
-SELECT Library.IsBookCopyAvailable(45) As IsBookCopyAvailable; --IsBookCopyAvailable Function
-EXEC Library.BorrowBook @MemberID = 5, @CopyID = 45;  --Cant Borrow
-EXEC Library.BorrowBook @MemberID = 4, @CopyID = 48;
---Table After
-select *
-from Library.Loans
---Triger Test
+ORDER BY LogID DESC
+
+
+--IsBookCopyAvailable Function
+SELECT Library.IsBookCopyAvailable(@copyIdToBorrow1) As IsBookCopyAvailable; --Clean Code
+--Library.GetMemberActiveLoanCount Function
+Select Library.GetMemberActiveLoanCount(@memberId) As LoanCount; --Hossein 
+-- Library.HasMemberOverdueBooks Function
+SELECT Library.HasMemberOverdueBooks(@memberId) AS HasOverdue;
+
+
+--Borrow Book
+EXEC Library.BorrowBook @MemberID = @memberId, @CopyID = @copyIdToBorrow1; --Hossein  --Clean Code **
+EXEC Library.BorrowBook @MemberID = @memberId, @CopyID = @copyIdToBorrow2;--Hossein  --Clean Code **
 -- Updates the book copy status to "Borrowed" after a new loan is inserted.
-select* 
-from Library.BookCopies
-
-select * 
-from Library.LibraryLog
---Library.HasMemberOverdueBooks
---Excecute
-SELECT Library.HasMemberOverdueBooks(4) AS HasOverdue;
-SELECT 
-    MemberID,
-    Library.HasMemberOverdueBooks(MemberID) AS HasOverdue
-FROM 
-    Library.LibraryMembers;
-Select Library.GetMemberActiveLoanCount(4) As LoanCount;
-Select Library.GetMemberActiveLoanCount(5) As LoanCount;
 
 
---Library.ReturnBook Procedure
---Excecute
-EXEC Library.ReturnBook @CopyID = 45;
-EXEC Library.ReturnBook @CopyID = 48;
+*/
+-- ---3. RETURNING PROCESS ---
 
--- Updates the book copy status to "Available" when a book is returned.
---Triger Test
---Library.TR_Loans_AfterUpdate_HandleReturnAndUpdateBookCopyStatus
-SELECT Library.IsBookCopyAvailable(45) As IsBookCopyAvailable;  --
-SELECT Library.IsBookCopyAvailable(48) As IsBookCopyAvailable; --
---Table After
+/*
+DECLARE @studentNationalID NVARCHAR(10) = '1234567890';    --Hossein
+DECLARE @isbnToTest NVARCHAR(20) = '978-0132350884'; -- Clean Code
+
+
+DECLARE @memberId INT;
+DECLARE @bookId INT;
+DECLARE @copyId INT;
+
+SELECT @memberId = mem.MemberID
+FROM Library.LibraryMembers AS mem
+JOIN Education.Students AS stu ON mem.StudentID = stu.StudentID
+WHERE stu.NationalID = @studentNationalID;
+
+-- Find BookID using ISBN
+SELECT @bookId = BookID FROM Library.Books WHERE ISBN = @isbnToTest;
+
+-- Find ONE available copy of this book
+SELECT TOP 1 @copyId = CopyID 
+FROM Library.BookCopies 
+WHERE BookID = @bookId AND CopyStatusID = (SELECT CopyStatusID FROM Library.BookCopyStatuses WHERE StatusName = 'Borrowed');
+
+ --> Finding the loan record for CopyID: ' + CAST(@copyId AS VARCHAR);
+
+SELECT LoanID, MemberID, CopyID, LoanDate, DueDate, ReturnDate 
+FROM Library.Loans 
+WHERE CopyID = @copyId AND ReturnDate IS NULL;
+
+--> Updating DueDate to 15 days in the past to force a fine...';
+
+-- This UPDATE statement makes the book overdue
+UPDATE Library.Loans
+SET DueDate = DATEADD(day, -15, GETDATE())
+WHERE CopyID = @copyId AND ReturnDate IS NULL;
+
+SELECT LoanID, MemberID, CopyID, LoanDate, DueDate, ReturnDate 
+FROM Library.Loans 
+WHERE CopyID = @copyId AND ReturnDate IS NULL;
+
+SELECT Library.HasMemberOverdueBooks(@memberId) AS HasOverdue;
+
+
+--Table 
+select *
+from Education.Students
+select *
+from Library.LibraryMembers
 select *
 from Library.Loans
+select *
+from Library.Books
 select* 
 from Library.BookCopies
 select *
 from Library.BookCopyStatuses
-
 select * 
 from Library.LibraryLog
+ORDER BY LogID DESC
+--Return Book
+EXEC Library.ReturnBook @CopyID = @copyId; --**
 
---Library.AddBookWithCopies Procedure
---Exec
-select *
-from Library.Publishers
-EXEC Library.AddBookWithCopies
-    @ISBN = '9780136042594',
-    @Title = 'Artificial Intelligence: A Modern Approach',
-    @PublisherID = 12,  
-    @PublicationYear = 2020,
-    @Edition = '4th',
-    @Description = 'Reference book on AI by Russell and Norvig.',
-    @NumberOfCopies = 3,
-    @AcquisitionDate = '2025-06-25',
-    @PurchasePrice = 120.00,
-    @LocationInLibrary = 'Section A - Shelf 3';
---Table After
-SELECT * FROM Library.Books;
+*/
 
-SELECT * FROM Library.BookCopies;
---Test TRIGGER Library.TR_Books_LogChanges
-SELECT * FROM Library.LibraryLog; 
--- Test TRIGGER Library.TR_LibraryMembers_LogChanges
-select * from Library.LibraryMembers;
-select * from Library.MemberAccountStatuses;
-select * from Education.Students;
-SELECT * FROM Library.Books;
-SELECT * FROM Library.BookCopies;
---Exec Insert
+
+
+-- # 4. Testing Library.AddBookWithCopies & TR_Books_LogChanges Trigger
+
+--DECLARE @publisherName NVARCHAR(100) = 'O''Reilly Media'; 
+--DECLARE @publisherId INT = (SELECT PublisherID FROM Library.Publishers WHERE PublisherName = @publisherName);
+
+--EXEC Library.AddBookWithCopies
+--    @ISBN = '978-1492057634', 
+--    @Title = 'CLRS',
+--    @PublisherID = @publisherId,
+--    @PublicationYear = 2022,
+--    @Edition = '1st',
+--    @Description = 'A comprehensive look at the data Structure landscape.',
+--    @NumberOfCopies = 2,
+--    @AcquisitionDate = '2024-01-15',
+--    @PurchasePrice = 55.00,
+--    @LocationInLibrary = 'Section D - Shelf 1';
+
+--SELECT * FROM Library.Books;
+--SELECT * FROM Library.BookCopies;
+--SELECT * From Library.LibraryLog
+--ORDER BY LogID DESC;
+
+
+
+/*
+ # 5. Testing Student Registration & TR_LibraryMembers_LogChanges Trigger
+Exec Insert
 Declare @MajorID INT;
 SELECT @MajorID = MajorID FROM Education.Majors WHERE MajorName = 'Computer Engineering';
 EXEC Education.RegisterStudent @NationalID = '1434567890', @FirstName = 'Negin', @LastName = 'Kabirian', @MajorID = @MajorID, @DateOfBirth = '2005-01-23',
     @Email = 'negink1383@gmail.com',@PhoneNumber = '09121112235',@RegisteredByUserID = 'TestScript';
-
---Exec Update
+Declare @StudentId Int;
+DECLARE @studentNationalID NVARCHAR(10) = '1434567890'; --Negin
+select  @StudentId = StudentID  from Education.Students where @studentNationalID = NationalID;
+Exec Update
 UPDATE Library.LibraryMembers
 SET AccountStatusID = 15  --Suspended
-WHERE StudentID = 10;
---Table After
+WHERE StudentID = @studentID;
+Table After
 SELECT * FROM Library.LibraryLog
 WHERE AffectedTable = 'Library.LibraryMembers'
 ORDER BY LogID DESC;
+*/
 
---
+--6 Recommend Book
 
--- ====================================================================
--- FINAL COMPATIBLE TEST SCRIPT for Library.RecommendBooksToStudent
--- This version uses a simplified, more compatible error handler.
--- ====================================================================
-UPDATE Library.LibraryMembers
-SET AccountStatusID = 13  --Suspended
-WHERE StudentID = 10;
-SET NOCOUNT ON;
-GO
+    DECLARE @targetStudent_NationalID NVARCHAR(10) = '1234567890'; -- Hossein Abbasi
+    DECLARE @similarStudent_NationalID NVARCHAR(10) = '1234567891'; -- Sara Mohammadi
 
-BEGIN TRANSACTION;
+    DECLARE @commonBook1_ISBN NVARCHAR(20) = '978-0321125217'; -- Refactoring 
+    DECLARE @commonBook2_ISBN NVARCHAR(20) = '978-0132350884'; -- Clean Code 
+    DECLARE @recommendBook_ISBN NVARCHAR(20) = '978-0321765723'; -- The Lord of the Rings 
 
-BEGIN TRY
-    PRINT '--- STEP 1: Setting up corrected loan history for the test scenario ---';
+   
+    DECLARE @targetStudentID INT, @targetMemberID INT;
+    SELECT @targetStudentID = s.StudentID, @targetMemberID = m.MemberID 
+    FROM Education.Students s JOIN Library.LibraryMembers m ON s.StudentID = m.StudentID WHERE s.NationalID = @targetStudent_NationalID;
 
-    -- Student and Member IDs from your data
-    DECLARE @TargetStudentID INT = 10; -- Negin Kabirian
-    DECLARE @TargetMemberID INT = 14;
+    DECLARE @similarStudentID INT, @similarMemberID INT;
+    SELECT @similarStudentID = s.StudentID, @similarMemberID = m.MemberID 
+    FROM Education.Students s JOIN Library.LibraryMembers m ON s.StudentID = m.StudentID WHERE s.NationalID = @similarStudent_NationalID;
 
-    DECLARE @SimilarStudentID INT = 9; -- Sara Mohammadi
-    DECLARE @SimilarMemberID INT = 8;
 
-    -- Book and Copy IDs
-    DECLARE @BookID_CleanCode INT = 22;
-    DECLARE @BookID_AI INT = 24;
-    DECLARE @CopyID_AI INT = 58;
+    DECLARE @commonBook1_ID INT = (SELECT BookID FROM Library.Books WHERE ISBN = @commonBook1_ISBN);
+    DECLARE @commonBook2_ID INT = (SELECT BookID FROM Library.Books WHERE ISBN = @commonBook2_ISBN);
+    DECLARE @recommendBook_ID INT = (SELECT BookID FROM Library.Books WHERE ISBN = @recommendBook_ISBN);
 
-    -- === FIX FOR IDENTITY_INSERT ERROR ===
-    PRINT '-> Enabling IDENTITY_INSERT for Library.BookCopies to insert a test record.';
-    SET IDENTITY_INSERT Library.BookCopies ON;
 
-    -- Insert a temporary copy of "Clean Code" for the test
-    DECLARE @NewCopyID_CleanCode_ForSara INT = 101; 
+    DECLARE @availableStatusID INT = (SELECT CopyStatusID FROM Library.BookCopyStatuses WHERE StatusName = 'Available');
     
-    IF NOT EXISTS (SELECT 1 FROM Library.BookCopies WHERE CopyID = @NewCopyID_CleanCode_ForSara)
-    BEGIN
-        PRINT '-> Inserting a temporary copy of "Clean Code" (BookID=22) with explicit CopyID=101.';
-        INSERT INTO Library.BookCopies (CopyID, BookID, AcquisitionDate, CopyStatusID, LocationInLibrary, PurchasePrice)
-        VALUES (@NewCopyID_CleanCode_ForSara, @BookID_CleanCode, GETDATE(), 15, 'Test Shelf', 0.00);
-    END
+    DECLARE @copy_common1_target INT = (SELECT TOP 1 CopyID FROM Library.BookCopies WHERE BookID = @commonBook1_ID AND CopyStatusID = @availableStatusID);
+    DECLARE @copy_common1_similar INT = (SELECT TOP 1 CopyID FROM Library.BookCopies WHERE BookID = @commonBook1_ID AND CopyStatusID = @availableStatusID AND CopyID <> @copy_common1_target);
+
+    DECLARE @copy_common2_target INT = (SELECT TOP 1 CopyID FROM Library.BookCopies WHERE BookID = @commonBook2_ID AND CopyStatusID = @availableStatusID);
+    DECLARE @copy_common2_similar INT = (SELECT TOP 1 CopyID FROM Library.BookCopies WHERE BookID = @commonBook2_ID AND CopyStatusID = @availableStatusID AND CopyID <> @copy_common2_target);
     
-    SET IDENTITY_INSERT Library.BookCopies OFF;
-    PRINT '-> IDENTITY_INSERT for Library.BookCopies is now OFF.';
-    -- ==========================================
+    DECLARE @copy_recommend_similar INT = (SELECT TOP 1 CopyID FROM Library.BookCopies WHERE BookID = @recommendBook_ID AND CopyStatusID = @availableStatusID);
 
-    -- Create loan history for Negin (Target User)
-    PRINT '-> Negin borrows "The Lord of the Rings" (CopyID=51)';
-    EXEC Library.BorrowBook @MemberID = @TargetMemberID, @CopyID = 51;
 
-    PRINT '-> Negin borrows "Clean Code" (CopyID=56)';
-    EXEC Library.BorrowBook @MemberID = @TargetMemberID, @CopyID = 56;
-
-    -- Create loan history for Sara (Similar User)
-    PRINT '-> Sara borrows "The Lord of the Rings" (CopyID=52)';
-    EXEC Library.BorrowBook @MemberID = @SimilarMemberID, @CopyID = 52; 
-
-    PRINT '-> Sara borrows "Clean Code" (using the temporary CopyID=101)';
-    EXEC Library.BorrowBook @MemberID = @SimilarMemberID, @CopyID = @NewCopyID_CleanCode_ForSara;
-
-    PRINT '-> Sara borrows "Artificial Intelligence" (The book to be recommended)';
-    EXEC Library.BorrowBook @MemberID = @SimilarMemberID, @CopyID = @CopyID_AI;
-
-    PRINT '--- Loan history created successfully. ---';
-    PRINT '';
-    PRINT '--- STEP 2: Executing recommendation procedure for Negin (StudentID=10) ---';
-    PRINT '--- Expected Result: Recommendation for "Artificial Intelligence..." (BookID=24) ---';
-    PRINT '------------------------------------------------------------------------------------';
-
-    EXEC Library.RecommendBooksToStudent @StudentID = @TargetStudentID;
+    -- Hossein (Target Student) borrows two common books
+    EXEC Library.BorrowBook @MemberID = @targetMemberID, @CopyID = @copy_common1_target;
+    EXEC Library.BorrowBook @MemberID = @targetMemberID, @CopyID = @copy_common2_target;
+    -- Sara (Similar Student) borrows the same two books PLUS the recommendation book
+    PRINT '-> Sara (MemberID ' + CAST(@similarMemberID AS VARCHAR) + ') is borrowing "Refactoring" (CopyID ' + CAST(@copy_common1_similar AS VARCHAR) + ')';
+    EXEC Library.BorrowBook @MemberID = @similarMemberID, @CopyID = @copy_common1_similar;
     
-    PRINT '------------------------------------------------------------------------------------';
-    PRINT '';
-    PRINT '--- Test completed. Rolling back all changes. ---';
+    PRINT '-> Sara (MemberID ' + CAST(@similarMemberID AS VARCHAR) + ') is borrowing "Clean Code" (CopyID ' + CAST(@copy_common2_similar AS VARCHAR) + ')';
+    EXEC Library.BorrowBook @MemberID = @similarMemberID, @CopyID = @copy_common2_similar;
 
-    ROLLBACK TRANSACTION;
+    PRINT '-> Sara (MemberID ' + CAST(@similarMemberID AS VARCHAR) + ') is borrowing "The Lord of the Rings" (CopyID ' + CAST(@copy_recommend_similar AS VARCHAR) + ')';
+    EXEC Library.BorrowBook @MemberID = @similarMemberID, @CopyID = @copy_recommend_similar;
 
-END TRY
-BEGIN CATCH
-    -- Simplified and more compatible error handler
-    -- Attempt to turn off IDENTITY_INSERT just in case the error happened after it was turned on.
-    -- This is safe to run even if it's already off.
-    SET IDENTITY_INSERT Library.BookCopies OFF;
-    
-    IF @@TRANCOUNT > 0
-        ROLLBACK TRANSACTION;
-    
-    PRINT '!!! An error occurred. All changes have been rolled back. !!!';
-    -- Displaying the error message that occurred inside the TRY block
-    SELECT ERROR_NUMBER() AS ErrorNumber, ERROR_MESSAGE() AS ErrorMessage;
-END CATCH;
-GO
+ 
+    -- Execute the actual procedure to be tested
+    EXEC Library.RecommendBooksToStudent @StudentID = @targetStudentID;
+
+
