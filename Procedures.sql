@@ -785,13 +785,11 @@ BEGIN
     PRINT 'Starting book recommendation generation for all students at ' + CONVERT(VARCHAR, @StartTime, 120);
 
     -- Step 1: Clear out old recommendations to make way for the new ones.
-    -- TRUNCATE TABLE is fast but cannot be used if the table is referenced by a FK.
-    -- DELETE is safer.
     DELETE FROM Library.BookRecommendations;
     PRINT 'Old recommendations cleared.';
 
     -- Step 2: Create a temporary table to capture the output of the existing procedure.
-    -- The schema must match the output of RecommendBooksToStudent.
+
     CREATE TABLE #TempRecommendations (
         BookID INT,
         Title NVARCHAR(255),
@@ -811,10 +809,10 @@ BEGIN
 
     WHILE @@FETCH_STATUS = 0
     BEGIN
-        -- Clear the temp table for each student to avoid carrying over results
+        -- Clear the temp table 
         TRUNCATE TABLE #TempRecommendations;
 
-        -- Execute your friend's procedure and insert its results into our temp table
+        
         BEGIN TRY
             INSERT INTO #TempRecommendations (BookID, Title, Frequency)
             EXEC Library.RecommendBooksToStudent @StudentID = @CurrentStudentID;

@@ -93,7 +93,7 @@ GO
 BEGIN TRY
     INSERT INTO Education.Semesters (SemesterID, SemesterName, StartDate, EndDate, IsCurrentSemester) VALUES
     (20231, 'Fall 2023', '2023-09-23', '2024-01-20', 0),
-    (20241, 'Spring 2024', '2024-02-06', '2024-06-15', 1), -- current semester
+    (20241, 'Spring 2024', '2024-02-06', '2024-06-15', 1),
     (20242, 'Summer 2024', '2024-07-01', '2024-08-30', 0),
     (20251, 'Fall 2024', '2024-09-22', '2025-01-18', 0); 
     PRINT 'Semesters seeded successfully.';
@@ -231,7 +231,7 @@ BEGIN TRY
     DECLARE @CompEngDeptID_Head INT = (SELECT DepartmentID FROM Education.Departments WHERE DepartmentName = 'Computer Engineering');
     DECLARE @ElecEngDeptID_Head INT = (SELECT DepartmentID FROM Education.Departments WHERE DepartmentName = 'Electrical Engineering');
     
-    -- Using new emails based on your updated Professors list
+   
     DECLARE @ProfNaderID_Head INT = (SELECT ProfessorID FROM Education.Professors WHERE Email = 'n.karimi@university.com');
     DECLARE @ProfTabanID_Head INT = (SELECT ProfessorID FROM Education.Professors WHERE Email = 'd.taban@university.com'); 
 
@@ -283,12 +283,12 @@ BEGIN TRY
     DECLARE @AvailableCopyStatusID INT = (SELECT CopyStatusID FROM Library.BookCopyStatuses WHERE StatusName = 'Available');
     DECLARE @BorrowedCopyStatusID INT = (SELECT CopyStatusID FROM Library.BookCopyStatuses WHERE StatusName = 'Borrowed'); -- This might be wrong, should be BookCopyStatuses
 
-    -- FIX: Corrected variable name from AccountStatusID to CopyStatusID
+ 
     SET @AvailableCopyStatusID = (SELECT CopyStatusID FROM Library.BookCopyStatuses WHERE StatusName = 'Available');
     SET @BorrowedCopyStatusID = (SELECT CopyStatusID FROM Library.BookCopyStatuses WHERE StatusName = 'Borrowed');
 
 
-    -- Get Book IDs (Assuming Books were seeded in Group 2)
+    -- Get Book IDs 
     DECLARE @RefactoringBookID INT = (SELECT BookID FROM Library.Books WHERE ISBN = '978-0321125217');
     DECLARE @LordOfTheRingsBookID INT = (SELECT BookID FROM Library.Books WHERE ISBN = '978-0321765723');
     DECLARE @NietzscheBookID INT = (SELECT BookID FROM Library.Books WHERE ISBN = '978-6002291334');
@@ -374,7 +374,7 @@ END CATCH
 GO
 
 BEGIN TRY
-    -- Get Course IDs (all courses must have been inserted in Group 3)
+    -- Get Course IDs 
     DECLARE @Math1_ID INT = (SELECT CourseID FROM Education.Courses WHERE CourseCode = '1914101');
     DECLARE @Math2_ID INT = (SELECT CourseID FROM Education.Courses WHERE CourseCode = '1914107');
     DECLARE @Physics1_ID INT = (SELECT CourseID FROM Education.Courses WHERE CourseCode = '2010115');
@@ -457,9 +457,8 @@ BEGIN CATCH
 END CATCH
 GO
 
--- ============================================================================
+
 -- Insert Curriculum Data (for Computer Engineering - Software Major)
--- ============================================================================
 PRINT 'Inserting curriculum data...';
 BEGIN TRY
     DECLARE @MajorID_Curriculum INT;
@@ -573,7 +572,7 @@ BEGIN TRY
     DECLARE @Summer2024_ID INT = (SELECT SemesterID FROM Education.Semesters WHERE SemesterID = 20242);
     DECLARE @Fall2024_ID INT = (SELECT SemesterID FROM Education.Semesters WHERE SemesterID = 20251);
 
-    -- Get Professor IDs (using updated names from previous step)
+    -- Get Professor IDs 
     DECLARE @ProfNaderID INT = (SELECT ProfessorID FROM Education.Professors WHERE Email = 'n.karimi@university.com');
     DECLARE @ProfShirinID INT = (SELECT ProfessorID FROM Education.Professors WHERE Email = 's.baghool@university.com');
     DECLARE @ProfSajadID INT = (SELECT ProfessorID FROM Education.Professors WHERE Email = 's.mari@university.com');
@@ -584,7 +583,7 @@ BEGIN TRY
     DECLARE @RoomE203_ID INT = (SELECT RoomID FROM Education.Rooms WHERE RoomNumber = 'E-203');
     DECLARE @RoomS300_ID INT = (SELECT RoomID FROM Education.Rooms WHERE RoomNumber = 'S-300');
 
-    -- Get Course IDs (from Group 3 / Curriculum PDF)
+    -- Get Course IDs 
     DECLARE @Math1_ID INT = (SELECT CourseID FROM Education.Courses WHERE CourseCode = '1914101');
     DECLARE @Physics1_ID INT = (SELECT CourseID FROM Education.Courses WHERE CourseCode = '2010115');
     DECLARE @ProgFund_ID INT = (SELECT CourseID FROM Education.Courses WHERE CourseCode = '1730115');
@@ -606,8 +605,8 @@ BEGIN TRY
     INSERT INTO Education.OfferedCourses (CourseID, ProfessorID, SemesterID, Capacity, RoomID, ScheduleInfo) VALUES
     (@AdvProg_ID, @ProfNaderID, @Spring2024_ID, 40, @RoomE102_ID, 'Sun/Tue 14:00-16:00'),
     (@Discrete_ID, @ProfShirinID, @Spring2024_ID, 40, @RoomE101_ID, 'Mon/Wed 14:00-16:00'),
-	(@Math1_ID, @ProfSajadID, @Spring2024_ID, 60, @RoomS300_ID, 'Sun/Tue 12:00-14:00'), -- Math 1 offered again
-    (@Physics1_ID, @ProfSajadID, @Spring2024_ID, 60, @RoomS300_ID, 'Mon/Wed 12:00-14:00'), -- Physics 1 offered again
+	(@Math1_ID, @ProfSajadID, @Spring2024_ID, 60, @RoomS300_ID, 'Sun/Tue 12:00-14:00'),
+    (@Physics1_ID, @ProfSajadID, @Spring2024_ID, 60, @RoomS300_ID, 'Mon/Wed 12:00-14:00'), 
     (@ProgFund_ID, @ProfNaderID, @Spring2024_ID, 30, @RoomE101_ID, 'Sat/Mon 12:00-14:00'); 
 
     -- Higher level courses offered in Fall 2024 (for future enrollment/suggestion tests)

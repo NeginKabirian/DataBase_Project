@@ -10,9 +10,8 @@ DECLARE @Capacity_CS101 INT;
 DECLARE @OutputHosein TABLE (NewStudentID INT);
 DECLARE @OutputSara TABLE (NewStudentID INT);
 
--- ============================================================================
--- STEP 1: CLEANUP ONLY TEST-SPECIFIC DATA
--- ============================================================================
+
+--CLEANUP ONLY TEST-SPECIFIC DATA
 PRINT '--- Step 1: Cleaning up test-specific data... ---';
 DELETE FROM Library.LibraryMembers;
 DELETE FROM Education.Students;
@@ -20,9 +19,8 @@ DELETE FROM Education.Courses WHERE CourseCode = 'LOG_COURSE_TEST'; -- Clean up 
 DELETE FROM Education.EducationLog; -- Clean the log for a fresh view of this test run
 PRINT 'Cleanup complete.';
 
--- ============================================================================
--- STEP 2: TEST TR_Courses_LogChanges TRIGGER
--- ============================================================================
+
+--  TEST TR_Courses_LogChanges TRIGGER
 PRINT '--- Step 2: Testing TR_Courses_LogChanges Trigger ---';
 INSERT INTO Education.Courses (CourseCode, CourseName, Credits, DepartmentID) VALUES ('LOG_COURSE_TEST', 'Course for Logging', 3, (SELECT TOP 1 DepartmentID FROM Education.Departments));
 SET @TestCourseID = SCOPE_IDENTITY();
@@ -31,9 +29,8 @@ DELETE FROM Education.Courses WHERE CourseID = @TestCourseID;
 PRINT 'Course DML operations for logging trigger test completed.';
 PRINT '---------------------------------------------------';
 
--- ============================================================================
--- STEP 3: SIMULATE STUDENT LIFECYCLE (REGISTRATION & ENROLLMENT)
--- ============================================================================
+
+-- SIMULATE STUDENT LIFECYCLE (REGISTRATION & ENROLLMENT)
 PRINT '--- Step 3: Simulating Student Lifecycle... ---';
 
 -- 3a. Register "Hosein"
@@ -43,7 +40,7 @@ INSERT INTO @OutputHosein EXEC Education.RegisterStudent @NationalID = '12345678
 SELECT @TestStudentID_Hosein = NewStudentID FROM @OutputHosein;
 PRINT 'New student "Hosein Abbasi" registered with ID: ' + CAST(@TestStudentID_Hosein AS VARCHAR);
 
--- VERIFICATION 3a: Check if Hosein and his library account were created
+-- 3a: Check if Hosein and his library account were created
 SELECT S.StudentID, S.FirstName, LM.LibraryCardNumber FROM Education.Students S LEFT JOIN Library.LibraryMembers LM ON S.StudentID = LM.StudentID WHERE S.StudentID = @TestStudentID_Hosein;
 
 -- 3b. Enroll "Hosein" in Fall 2023 courses
@@ -60,7 +57,7 @@ EXEC Education.RecordStudentGrade @EnrollmentID = @CS101_EnrollID, @Grade = '18'
 EXEC Education.RecordStudentGrade @EnrollmentID = @Math1_EnrollID, @Grade = '16';
 PRINT 'Grades for Hosein recorded for Fall 2023.';
 
--- VERIFICATION 3c: Check Hosein's enrollments and grades
+--3c: Check Hosein's enrollments and grades
 SELECT C.CourseCode, E.Grade, ES.StatusName FROM Education.Enrollments E JOIN Education.OfferedCourses OC ON E.OfferedCourseID = OC.OfferedCourseID JOIN Education.Courses C ON OC.CourseID = C.CourseID JOIN Education.EnrollmentStatuses ES ON E.EnrollmentStatusID = ES.EnrollmentStatusID WHERE E.StudentID = @TestStudentID_Hosein;
 
 -- 3d. Log academic history for "Hosein"
@@ -75,7 +72,6 @@ INSERT INTO @OutputSara EXEC Education.RegisterStudent @NationalID = '1234567891
 
 SELECT @TestStudentID_Sara = NewStudentID FROM @OutputSara;
 PRINT 'New student "Sara Test" registered with ID: ' + CAST(@TestStudentID_Sara AS VARCHAR);
--- FIX: Get the Physics1 OfferedCourseID before using it
 SELECT @Physics1_OCID = OC.OfferedCourseID FROM Education.OfferedCourses OC JOIN Education.Courses C ON OC.CourseID = C.CourseID WHERE C.CourseCode = '2010115' AND OC.SemesterID = 20231;
 EXEC Education.EnrollStudentInCourse @StudentID = @TestStudentID_Sara, @OfferedCourseID = @Physics1_OCID;
 SELECT @Physics1_EnrollID_Sara = EnrollmentID FROM Education.Enrollments WHERE StudentID = @TestStudentID_Sara AND OfferedCourseID = @Physics1_OCID;
@@ -85,9 +81,8 @@ PRINT 'Sara failed Physics 1.';
 PRINT 'Student lifecycle simulation complete.';
 PRINT '---------------------------------------------------';
 
--- ============================================================================
--- STEP 4: TEST SuggestCoursesForStudent PROCEDURE
--- ============================================================================
+
+-- TEST SuggestCoursesForStudent PROCEDURE
 PRINT '--- Step 4: Testing SuggestCoursesForStudent ---';
 SET @Spring2024_ID = 20241;
 
@@ -99,9 +94,10 @@ EXEC Education.SuggestCoursesForStudent @StudentID = @TestStudentID_Hosein, @Tar
 PRINT '--- Suggestions for Sara (failed a course):';
 EXEC Education.SuggestCoursesForStudent @StudentID = @TestStudentID_Sara, @TargetSemesterID = @Spring2024_ID;
 
--- ============================================================================
--- STEP 5: FINAL VERIFICATION OF ALL FUNCTIONS (using Hosein's data)
--- ============================================================================
+
+
+
+--  FINAL VERIFICATION OF ALL FUNCTIONS (using Hosein's data)
 PRINT '--- Step 5: Final verification of all Education functions (for Hosein) ---';
 SELECT @AdvProg_ID = CourseID FROM Education.Courses WHERE CourseCode = '1734102';
 SELECT @DB1_ID = CourseID FROM Education.Courses WHERE CourseCode = '1734303';
@@ -121,18 +117,17 @@ PRINT '  - Hosein''s Current Academic Status (Expected: Excellent): ' + CAST(Edu
 
 PRINT '--- Testing GetOfferedCourseAvailableCapacity:';
 SELECT @Capacity_CS101 = Capacity FROM Education.OfferedCourses WHERE OfferedCourseID = @CS101_OCID;
--- FIX: Corrected expectation. Since Hosein is 'Passed', he is not 'Enrolled'. Capacity should be full.
+--Since Hosein is 'Passed', he is not 'Enrolled'. Capacity should be full.
 PRINT '  - Available Capacity for CS101 (Hosein PASSED) (Expected: ' + CAST(@Capacity_CS101 AS VARCHAR) + '): ' + CAST(Education.GetOfferedCourseAvailableCapacity(@CS101_OCID) AS VARCHAR);
 
 
 DECLARE @TestStudentID_Hosein_Update INT = (SELECT StudentID FROM Education.Students WHERE NationalID = 'TEST_E2E_HOSEIN');
 DECLARE @CurrentMajorID INT = (SELECT MajorID FROM Education.Students WHERE StudentID = @TestStudentID_Hosein_Update);
 
--- ============================================================================
--- STEP 5 (Continued): FINAL VERIFICATION OF REMAINING PROCEDURES
--- ============================================================================
 
 
+
+--(Continued): FINAL VERIFICATION OF REMAINING PROCEDURES
 DECLARE @TestStudentID_Hosein_ForUpdate INT = (SELECT StudentID FROM Education.Students WHERE NationalID = '1234567890'); 
 DECLARE @TestStudentID_Sara_ForUpdate INT = (SELECT StudentID FROM Education.Students WHERE NationalID = '1234567891');
 
@@ -166,7 +161,7 @@ ELSE
 BEGIN
     PRINT '  - SKIPPED: Could not find the test student or target major to perform the update.';
 END
-PRINT ''; -- Add a space for readability
+PRINT '';
 
 -- ----------------------------------------------------------------------------
 -- TEST 5g: Test UpdateStudentStatus PROCEDURE & Trigger Interaction
@@ -181,7 +176,7 @@ BEGIN
         @StudentID = @TestStudentID_Sara_ForUpdate,
         @NewStatusName = 'Withdrawn';
 
-    -- Verification 1: Check the student's status in the Education schema
+    --Check the student's status in the Education schema
     PRINT '  - Verification 1: Checking Education.Students status...';
     SELECT
         S.FirstName,
@@ -191,7 +186,7 @@ BEGIN
     WHERE S.StudentID = @TestStudentID_Sara_ForUpdate;
     -- Expected: EducationStatus should be 'Withdrawn'
 
-    -- Verification 2: Check the library member's account status (this verifies the trigger)
+    --Check the library member's account status (this verifies the trigger)
     PRINT '  - Verification 2: Checking Library.LibraryMembers status...';
     SELECT
         S.FirstName,

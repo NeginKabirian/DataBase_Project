@@ -1,11 +1,9 @@
-USE Database_project; -- <<<<<<<<<<< REPLACE YourDatabaseName
+USE Database_project; 
 GO
 
 PRINT '--- Starting Comprehensive Security Permissions Test ---';
 
--- ============================================================================
--- STEP 1: PREPARATION - CREATE TEST USERS FOR EACH ROLE
--- ============================================================================
+
 PRINT '--- Step 1: Creating/Ensuring Test Users and Logins for each role... ---';
 
 -- Admin User
@@ -26,9 +24,8 @@ ALTER ROLE StudentRole ADD MEMBER StudentTestUser;
 PRINT 'Test users prepared and assigned to roles.';
 PRINT '---------------------------------------------------';
 
--- ============================================================================
--- STEP 2: TEST AS EducationAdminRole
--- ============================================================================
+
+--TEST AS EducationAdminRole
 PRINT '--- Step 2: Testing as EducationAdminRole ---';
 EXECUTE AS USER = 'AdminTestUser';
 
@@ -53,13 +50,12 @@ BEGIN CATCH
     PRINT '    SUCCESS: Admin was correctly denied from inserting into Library.Books.';
 END CATCH
 
-REVERT; -- IMPORTANT: Revert back to the original user
+REVERT; --Revert back to the original user
 PRINT 'Admin role tests complete.';
 PRINT '---------------------------------------------------';
 
--- ============================================================================
--- STEP 3: TEST AS LibrarianRole
--- ============================================================================
+
+-- TEST AS LibrarianRole
 PRINT '--- Step 3: Testing as LibrarianRole ---';
 EXECUTE AS USER = 'LibrarianTestUser';
 
@@ -98,9 +94,8 @@ REVERT;
 PRINT 'Librarian role tests complete.';
 PRINT '---------------------------------------------------';
 
--- ============================================================================
--- STEP 4: TEST AS StudentRole
--- ============================================================================
+
+-- TEST AS StudentRole
 PRINT '--- Step 4: Testing as StudentRole ---';
 EXECUTE AS USER = 'StudentTestUser';
 
@@ -124,7 +119,7 @@ BEGIN CATCH
     PRINT '    SUCCESS: Student was correctly denied from inserting into Enrollments.';
 END CATCH
 
--- Permitted Action: Execute a function that has been granted
+-- Permitted Action
 PRINT '  - Attempting to execute CalculateStudentGPA directly... (should SUCCEED)';
 DECLARE @AnyStudentID INT = (SELECT TOP 1 StudentID FROM Education.Students);
 BEGIN TRY
@@ -146,9 +141,8 @@ REVERT;
 PRINT 'Student role tests complete.';
 PRINT '---------------------------------------------------';
 
--- ============================================================================
--- STEP 5: CLEAN UP TEST USERS AND LOGINS
--- ============================================================================
+
+-- CLEAN UP TEST USERS AND LOGINS
 PRINT '--- Step 5: Cleaning up test users and logins... ---';
 -- Drop users from the database first
 IF EXISTS (SELECT name FROM sys.database_principals WHERE name = 'AdminTestUser') DROP USER AdminTestUser;

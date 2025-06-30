@@ -107,10 +107,10 @@ BEGIN
             AND E.EnrollmentStatusID = @PassedEnrollmentStatusID;
     END
 
-    -- Calculate remaining credits
+    
     SET @RemainingCredits = @RequiredMajorCredits - @CompletedCredits;
 
-    -- if student has taken more than required
+   
     IF @RemainingCredits < 0
     BEGIN
         SET @RemainingCredits = 0;
@@ -141,28 +141,27 @@ BEGIN
     DECLARE @MetPrereqsCount INT;
     DECLARE @PassedStatusID INT;
 
-    -- Get the 'Passed' status ID, handle trailing/leading spaces
+    
     SELECT @PassedStatusID = EnrollmentStatusID
     FROM Education.EnrollmentStatuses
     WHERE TRIM(StatusName) = 'Passed';
 
-    -- If 'Passed' status isn't defined, we can't check, so it's a failure
     IF @PassedStatusID IS NULL
         RETURN 0;
 
-    -- 1. Count how many prerequisites are required for the target course
+    
     SELECT @RequiredPrereqsCount = COUNT(PrerequisiteCourseID)
     FROM Education.Prerequisites
     WHERE CourseID = @CourseID;
 
-    -- 2. If there are no prerequisites, the condition is met.
+  
     IF @RequiredPrereqsCount = 0
     BEGIN
         SET @AllPrerequisitesMet = 1;
         RETURN @AllPrerequisitesMet;
     END
 
-    -- 3. Count how many of those required prerequisites the student has passed
+    -- Count how many of those required prerequisites the student has passed
     SELECT @MetPrereqsCount = COUNT(DISTINCT P.PrerequisiteCourseID)
     FROM Education.Prerequisites P
     INNER JOIN Education.Enrollments E ON 1=1 -- This will be filtered by subquery
