@@ -429,10 +429,9 @@ BEGIN
     SET NOCOUNT ON;
     
     -- Check if it was an INSERT operation
-
+	DECLARE @UserID NVARCHAR(128) = SUSER_SNAME();
     IF EXISTS (SELECT * FROM inserted) AND NOT EXISTS (SELECT * FROM deleted)
     BEGIN
-		DECLARE @UserID NVARCHAR(128) = SUSER_SNAME();
         INSERT INTO [Library].[LibraryLog] (EventType, Description, AffectedTable, AffectedRecordID, UserID)
         SELECT
             'New Member Added',
@@ -447,7 +446,6 @@ BEGIN
     -- Check if it was an UPDATE operation
     IF EXISTS (SELECT * FROM inserted) AND EXISTS (SELECT * FROM deleted)
     BEGIN
-		DECLARE @UserID NVARCHAR(128) = SUSER_SNAME();
         -- Log changes only when the AccountStatusID has been modified.
         INSERT INTO [Library].[LibraryLog] (EventType, Description, AffectedTable, AffectedRecordID, UserID)
         SELECT
@@ -479,11 +477,10 @@ AFTER INSERT, UPDATE, DELETE
 AS
 BEGIN
     SET NOCOUNT ON;
-
+	DECLARE @UserID NVARCHAR(128) = SUSER_SNAME();
     -- Handle INSERT operations
     IF EXISTS (SELECT * FROM inserted) AND NOT EXISTS (SELECT * FROM deleted)
     BEGIN
-		DECLARE @UserID NVARCHAR(128) = SUSER_SNAME();
         INSERT INTO [Library].[LibraryLog] (EventType, Description, AffectedTable, AffectedRecordID, UserID)
         SELECT
             'New Book Added',
@@ -498,7 +495,6 @@ BEGIN
     -- Handle UPDATE operations
     IF EXISTS (SELECT * FROM inserted) AND EXISTS (SELECT * FROM deleted)
     BEGIN
-		DECLARE @UserID NVARCHAR(128) = SUSER_SNAME();
         INSERT INTO [Library].[LibraryLog] (EventType, Description, AffectedTable, AffectedRecordID, UserID)
         SELECT
             'Book Information Updated',
@@ -513,7 +509,6 @@ BEGIN
     -- Handle DELETE operations
     IF EXISTS (SELECT * FROM deleted) AND NOT EXISTS (SELECT * FROM inserted)
     BEGIN
-		DECLARE @UserID NVARCHAR(128) = SUSER_SNAME();
         INSERT INTO [Library].[LibraryLog] (EventType, Description, AffectedTable, AffectedRecordID, UserID)
         SELECT
             'Book Deleted',
