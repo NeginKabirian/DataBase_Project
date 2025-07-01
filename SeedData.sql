@@ -304,7 +304,8 @@ BEGIN TRY
     (@NietzscheBookID, '2021-03-01', @AvailableCopyStatusID, 'Phil 3-B', 25.00),
     (@KelidarBookID, '2021-03-01', @AvailableCopyStatusID, 'IranLit 1-D', 40.00),
     (@HeadFirstJavaBookID, '2022-02-15', @AvailableCopyStatusID, 'CS Shelf 1-B', 45.00),
-    (@CleanCodeBookID, '2022-02-15', @AvailableCopyStatusID, 'SE Shelf 2-A', 55.00);
+    (@CleanCodeBookID, '2022-02-15', @AvailableCopyStatusID, 'SE Shelf 2-A', 55.00),
+    (@CleanCodeBookID, '2022-02-15', @AvailableCopyStatusID, 'SE Shelf 2-A', 55.00);-- Another copy
     PRINT 'Book Copies seeded successfully.';
 END TRY
 BEGIN CATCH
@@ -623,11 +624,4 @@ BEGIN CATCH
     RETURN;
 END CATCH
 GO
---	-- غیرفعال کردن تمام قیود FK
---EXEC sp_msforeachtable 'ALTER TABLE ? NOCHECK CONSTRAINT ALL'
 
----- حذف داده‌ها
---EXEC sp_msforeachtable 'DELETE FROM ?'
-
----- فعال کردن دوباره قیود FK
---EXEC sp_msforeachtable 'ALTER TABLE ? WITH CHECK CHECK CONSTRAINT ALL'
