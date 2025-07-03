@@ -1,0 +1,12 @@
+﻿<?xml version="1.0"?>
+<DTS:ConnectionManager xmlns:DTS="www.microsoft.com/SqlServer/Dts"
+  DTS:ObjectName="DESKTOP-ECSG2IH_SQLEXPRESS.Database_project"
+  DTS:DTSID="{1E0B4A4B-F4BB-468D-91B0-912704F5023F}"
+  DTS:CreationName="OLEDB">
+  <DTS:ObjectData>
+    <DTS:ConnectionManager
+      DTS:ConnectRetryCount="1"
+      DTS:ConnectRetryInterval="5"
+      DTS:ConnectionString="Data Source=DESKTOP-ECSG2IH\SQLEXPRESS;Initial Catalog=Database_project;Provider=SQLOLEDB.1;Integrated Security=SSPI;Application Name=SSIS-RecommendBook Integration Services Project-{1E0B4A4B-F4BB-468D-91B0-912704F5023F}DESKTOP-ECSG2IH\SQLEXPRESS.Database_proj;Auto Translate=False;" />
+  </DTS:ObjectData>
+</DTS:ConnectionManager>

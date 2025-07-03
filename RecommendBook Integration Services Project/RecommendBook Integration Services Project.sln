@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.9.34723.18
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{C9674DCB-5085-4A16-B785-4C70DD1589BD}") = "RecommendBook Integration Services Project", "RecommendBook Integration Services Project\RecommendBook Integration Services Project.dtproj", "{691FA465-28D5-407A-945E-7D23E19077C1}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Development|Default = Development|Default
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{691FA465-28D5-407A-945E-7D23E19077C1}.Development|Default.ActiveCfg = Development
+		{691FA465-28D5-407A-945E-7D23E19077C1}.Development|Default.Build.0 = Development
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {C301FFEF-624C-4085-8509-B8743F6B1C2C}
+	EndGlobalSection
+EndGlobal
