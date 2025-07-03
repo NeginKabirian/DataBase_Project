@@ -1,7 +1,7 @@
 
 -- # 1. Testing Library.CountAvailableBookCopies Function
 --Tables
-/*select *
+select *
 from Library.Books
 select *
 from Library.BookCopies
@@ -19,7 +19,7 @@ SELECT Library.CountAvailableBookCopies(@bookId1) AS AvailableCopies;
 
 PRINT 'Counting available copies for ISBN: ' + @isbn2;
 SELECT Library.CountAvailableBookCopies(@bookId2) AS AvailableCopies;
-GO*/
+GO
 
 
 
@@ -27,7 +27,7 @@ GO*/
 
 -- 2. BORROWING PROCESS --  
 --Execute before and after borrow
-/*
+
 DECLARE @studentNationalIDForBorrow NVARCHAR(100) = '1234567890'; -- Hossein
 DECLARE @isbnToBorrow NVARCHAR(20) = '978-0132350884';       -- Clean Code
 
@@ -63,7 +63,7 @@ select *
 from Library.BookCopyStatuses
 select * 
 from Library.LibraryLog
-ORDER BY LogID DESC
+ORDER BY LogTimestamp ASC
 
 
 --IsBookCopyAvailable Function
@@ -80,10 +80,10 @@ EXEC Library.BorrowBook @MemberID = @memberId, @CopyID = @copyIdToBorrow2;--Hoss
 -- Updates the book copy status to "Borrowed" after a new loan is inserted.
 
 
-*/
+
 -- ---3. RETURNING PROCESS ---
 
-/*
+
 DECLARE @studentNationalID NVARCHAR(10) = '1234567890';    --Hossein
 DECLARE @isbnToTest NVARCHAR(20) = '978-0132350884'; -- Clean Code
 
@@ -140,41 +140,40 @@ select *
 from Library.BookCopyStatuses
 select * 
 from Library.LibraryLog
-ORDER BY LogID DESC
+ORDER BY LogTimestamp ASC
 --Return Book
 EXEC Library.ReturnBook @CopyID = @copyId; --**
 
-*/
+
 
 
 
 -- # 4. Testing Library.AddBookWithCopies & TR_Books_LogChanges Trigger
 
---DECLARE @publisherName NVARCHAR(100) = 'O''Reilly Media'; 
---DECLARE @publisherId INT = (SELECT PublisherID FROM Library.Publishers WHERE PublisherName = @publisherName);
+DECLARE @publisherName NVARCHAR(100) = 'O''Reilly Media'; 
+DECLARE @publisherId INT = (SELECT PublisherID FROM Library.Publishers WHERE PublisherName = @publisherName);
 
---EXEC Library.AddBookWithCopies
---    @ISBN = '978-1492057634', 
---    @Title = 'CLRS',
---    @PublisherID = @publisherId,
---    @PublicationYear = 2022,
---    @Edition = '1st',
---    @Description = 'A comprehensive look at the data Structure landscape.',
---    @NumberOfCopies = 2,
---    @AcquisitionDate = '2024-01-15',
---    @PurchasePrice = 55.00,
---    @LocationInLibrary = 'Section D - Shelf 1';
+EXEC Library.AddBookWithCopies
+    @ISBN = '978-1492057634', 
+    @Title = 'CLRS',
+    @PublisherID = @publisherId,
+    @PublicationYear = 2022,
+    @Edition = '1st',
+    @Description = 'A comprehensive look at the data Structure landscape.',
+    @NumberOfCopies = 2,
+    @AcquisitionDate = '2024-01-15',
+    @PurchasePrice = 55.00,
+    @LocationInLibrary = 'Section D - Shelf 1';
 
---SELECT * FROM Library.Books;
---SELECT * FROM Library.BookCopies;
---SELECT * From Library.LibraryLog
---ORDER BY LogID DESC;
+SELECT * FROM Library.Books;
+SELECT * FROM Library.BookCopies;
+SELECT * From Library.LibraryLog
+ORDER BY LogTimestamp ASC;
 
 
 
-/*
- # 5. Testing Student Registration & TR_LibraryMembers_LogChanges Trigger
-Exec Insert
+
+--# 5. Testing Student Registration & TR_LibraryMembers_LogChanges Trigger
 Declare @MajorID INT;
 SELECT @MajorID = MajorID FROM Education.Majors WHERE MajorName = 'Computer Engineering';
 EXEC Education.RegisterStudent @NationalID = '1434567890', @FirstName = 'Negin', @LastName = 'Kabirian', @MajorID = @MajorID, @DateOfBirth = '2005-01-23',
@@ -182,15 +181,16 @@ EXEC Education.RegisterStudent @NationalID = '1434567890', @FirstName = 'Negin',
 Declare @StudentId Int;
 DECLARE @studentNationalID NVARCHAR(10) = '1434567890'; --Negin
 select  @StudentId = StudentID  from Education.Students where @studentNationalID = NationalID;
-Exec Update
+
+DECLARE @SuspendedStatusID INT = (SELECT AccountStatusID FROM Library.MemberAccountStatuses WHERE StatusName = 'Suspended');
 UPDATE Library.LibraryMembers
-SET AccountStatusID = 15  --Suspended
-WHERE StudentID = @studentID;
-Table After
+SET AccountStatusID = @SuspendedStatusID
+WHERE StudentID = @StudentId;
+
 SELECT * FROM Library.LibraryLog
 WHERE AffectedTable = 'Library.LibraryMembers'
-ORDER BY LogID DESC;
-*/
+ORDER BY LogTimestamp ASC;
+
 
 --6 Recommend Book
 
@@ -210,6 +210,9 @@ ORDER BY LogID DESC;
     SELECT @similarStudentID = s.StudentID, @similarMemberID = m.MemberID 
     FROM Education.Students s JOIN Library.LibraryMembers m ON s.StudentID = m.StudentID WHERE s.NationalID = @similarStudent_NationalID;
 
+    EXEC Education.UpdateStudentStatus
+        @StudentID = @similarStudentID,
+        @NewStatusName = 'Active';
 
     DECLARE @commonBook1_ID INT = (SELECT BookID FROM Library.Books WHERE ISBN = @commonBook1_ISBN);
     DECLARE @commonBook2_ID INT = (SELECT BookID FROM Library.Books WHERE ISBN = @commonBook2_ISBN);
