@@ -245,7 +245,7 @@ BEGIN
     WHERE ss.StatusName = 'Active'
       AND i.StudentStatusID <> d.StudentStatusID;
 
-    INSERT INTO Library.LibraryLog (
+    INSERT INTO Education.EducationLog(
         EventType,
         Description,
         AffectedTable,
